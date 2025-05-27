@@ -106,6 +106,7 @@ const initialFormState: PrescriptionFormData = {
   referenceNo: '',
   currentDateTime: getTodayDate(),
   deliveryDateTime: getNextMonthDate(),
+  date: getTodayDate(),
   class: '',
   prescribedBy: '',
   name: '',
@@ -212,19 +213,19 @@ const OrderCardForm: React.FC = () => {
 
   // Effect to calculate Item Amount in manual entry popup
   useEffect(() => {
-    const rate = parseFloat(formData.manualEntryRate) || 0;
+    const rate = parseFloat(formData.manualEntryRate || '0');
     const qty = formData.manualEntryQty || 0;
     setFormData(prev => ({ ...prev, manualEntryItemAmount: rate * qty }));
   }, [formData.manualEntryRate, formData.manualEntryQty]);
 
   // Effect to calculate Balance and total Advance in Payment Section
   useEffect(() => {
-    const paymentEstimate = parseFloat(formData.paymentEstimate) || 0;
-    const schAmt = parseFloat(formData.schAmt) || 0;
-    const cashAdv1 = parseFloat(formData.cashAdv1) || 0;
-    const ccUpiAdv = parseFloat(formData.ccUpiAdv) || 0;
-    const chequeAdv = parseFloat(formData.chequeAdv) || 0;
-    const cashAdv2 = parseFloat(formData.cashAdv2) || 0;
+    const paymentEstimate = parseFloat(formData.paymentEstimate || '0');
+    const schAmt = parseFloat(formData.schAmt || '0');
+    const cashAdv1 = parseFloat(formData.cashAdv1 || '0');
+    const ccUpiAdv = parseFloat(formData.ccUpiAdv || '0');
+    const chequeAdv = parseFloat(formData.chequeAdv || '0');
+    const cashAdv2 = parseFloat(formData.cashAdv2 || '0');
 
     // Calculate total advance
     const totalAdvance = cashAdv1 + ccUpiAdv + chequeAdv + cashAdv2;
@@ -436,7 +437,7 @@ const OrderCardForm: React.FC = () => {
   };
 
   const handleApplyDiscount = () => {
-    const discountValue = parseFloat(formData.applyDiscount) || 0;
+    const discountValue = parseFloat(formData.applyDiscount || '0');
     if (discountValue <= 0) {
       alert('Please enter a valid discount value (greater than 0)');
       return;
@@ -529,7 +530,7 @@ const OrderCardForm: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {/* Order Info */}
           <div className="grid grid-cols-1 gap-3 text-gray-700 border p-4 rounded bg-blue-50 shadow-sm">
-            <Input label="Order No.:" value={formData.orderNo} name="orderNo" onChange={handleChange} readOnly />
+            <Input label="Prescription No.:" value={formData.prescriptionNo} name="prescriptionNo" onChange={handleChange} readOnly />
             <Input label="Reference No.:" value={formData.referenceNo} name="referenceNo" onChange={handleChange} />
             <Input label="Current Date/Time:" value={formData.currentDateTime} name="currentDateTime" onChange={handleChange} readOnly />
             <Input label="Delivery Date/Time:" value={formData.deliveryDateTime} name="deliveryDateTime" onChange={handleChange} type="datetime-local"/>
@@ -548,7 +549,12 @@ const OrderCardForm: React.FC = () => {
 
         {/* Prescription Section */}
         <PrescriptionSection
-          formData={formData}
+          formData={{
+            rightEye: formData.rightEye,
+            leftEye: formData.leftEye,
+            balanceLens: formData.balanceLens,
+            age: parseInt(formData.age) || 0
+          }}
           handleChange={handleChange}
           handleNumericInputChange={handleNumericInputChange}
           handleCheckboxChange={handleCheckboxChange}
@@ -744,7 +750,7 @@ const OrderCardForm: React.FC = () => {
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
                       <textarea
-                        value={formData.remarks}
+                        value={JSON.stringify(formData.remarks)}
                         onChange={handleChange}
                         name="remarks"
                         rows={4}

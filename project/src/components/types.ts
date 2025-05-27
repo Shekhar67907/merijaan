@@ -75,6 +75,22 @@ export interface Option {
   value: string;
 }
 
+export interface SelectedItem {
+  si: number;
+  itemCode: string;
+  itemName: string;
+  unit: string;
+  taxPercent: number;
+  rate: number;
+  amount: number;
+  qty: number;
+  discountAmount: number;
+  discountPercent: number;
+  brandName?: string;
+  index?: string;
+  coating?: string;
+}
+
 export interface PrescriptionFormData {
   prescriptionNo: string;
   referenceNo: string;
@@ -115,9 +131,28 @@ export interface PrescriptionFormData {
   bookingBy: string;
   namePrefix: string;
   billed: boolean;
-  selectedItems?: any[];  // Added to match OrderCardForm needs
-  manualEntryRate?: string;  // Added to match OrderCardForm needs
-  manualEntryQty?: number;  // Added to match OrderCardForm needs
-  currentDateTime?: string;  // Added to match OrderCardForm needs
-  deliveryDateTime?: string;  // Added to match OrderCardForm needs
+  selectedItems: SelectedItem[];
+  orderStatus: string;
+  orderStatusDate: string;
+  billNo: string;
+  paymentEstimate: string;
+  schAmt: string;
+  advance: string;
+  balance: string;
+  cashAdv1: string;
+  ccUpiAdv: string;
+  chequeAdv: string;
+  cashAdv2: string;
+  cashAdv2Date: string;
+  applyDiscount: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: string;
+  discountReason: string;
+  manualEntryType: 'Frames' | 'Sun Glasses';
+  manualEntryItemName: string;
+  manualEntryRate: string;
+  manualEntryQty: number;
+  manualEntryItemAmount: number;
+  currentDateTime: string;
+  deliveryDateTime: string;
 } 
