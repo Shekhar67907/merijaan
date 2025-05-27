@@ -257,9 +257,11 @@ const OrderCardForm: React.FC = () => {
       const lpdValue = parseFloat(formData.leftEye.dv.lpd);
       if (!isNaN(rpdValue) && !isNaN(lpdValue)) {
         const calculatedIPD = (rpdValue + lpdValue).toFixed(1);
+        console.log('[IPD Effect] Setting ipd to', calculatedIPD);
         setFormData(prev => ({ ...prev, ipd: calculatedIPD }));
       }
     }
+    // Do not touch any other part of the state!
   }, [formData.rightEye.dv.rpd, formData.leftEye.dv.lpd]);
 
   // Payment Section: Auto-calculate Payment Estimate and Sch Amt from selectedItems
@@ -513,7 +515,7 @@ const OrderCardForm: React.FC = () => {
   };
 
   return (
-    <form onSubmit={handleOrderCardSubmit} className="max-w-7xl mx-auto p-4 bg-gray-100 font-sans text-sm">
+    <form onSubmit={handleOrderCardSubmit} className="w-full max-w-screen-xl mx-auto p-4 bg-gray-100 font-sans text-sm">
       <Card className="mb-4 p-4 shadow-lg rounded-md bg-white border border-gray-200">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-4 border-b pb-3 bg-blue-100 rounded-t-md px-4 py-2">

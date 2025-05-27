@@ -45,6 +45,7 @@ export interface PrescriptionData {
   rpd?: string;
   lpd?: string;
   sphericalEquivalent?: string;  // Calculated value (SPH + CYL/2)
+  age?: number;  // Added age property for visual acuity calculations
 }
 
 // Data for one eye

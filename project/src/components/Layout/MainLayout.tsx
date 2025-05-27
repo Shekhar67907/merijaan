@@ -22,7 +22,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       </header>
       
       <main className="flex-1 p-4 overflow-y-auto">
-        <div className="min-w-max w-full">
+        <div className="w-full max-w-screen-2xl mx-auto">
           {children}
         </div>
       </main>

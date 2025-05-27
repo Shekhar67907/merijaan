@@ -1,7 +1,10 @@
 import React from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, FileText, CreditCard, ClipboardList } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import Button from '../ui/Button';
 
 const HomePage: React.FC = () => {
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <div className="w-full max-w-5xl aspect-video bg-gradient-to-r from-red-700 via-red-600 to-red-500 rounded-lg shadow-xl overflow-hidden relative">
@@ -27,7 +30,7 @@ const HomePage: React.FC = () => {
         </div>
       </div>
       
-      <div className="mt-8 text-center">
+      <div className="mt-12 text-center">
         <p className="text-gray-600">Software By:</p>
         <h3 className="font-bold text-gray-800 mt-1">HS Visionware Systems</h3>
         <p className="text-sm text-gray-600 mt-2">www.dirshtirx.com</p>
