@@ -426,4 +426,71 @@ export const handleSpecialCases = (data: PrescriptionData): PrescriptionData => 
   }
 
   return updated;
+};
+
+// Valid distance vision values
+const VALID_DISTANCE_VISION = ['6/6', '6/9', '6/12', '6/18', '6/24', '6/36', '6/60'];
+// Valid near vision values
+const VALID_NEAR_VISION = ['N5', 'N6', 'N8', 'N10', 'N12', 'N18', 'N24'];
+
+/**
+ * Validates and formats a Vn (Visual Acuity) value
+ * @param value The input value to validate
+ * @param isNearVision Whether this is for near vision (N.V) or distance vision (D.V)
+ * @returns The validated and formatted value, or null if invalid
+ */
+export const validateVnValue = (value: string, isNearVision: boolean): string | null => {
+  if (!value) return null;
+  
+  if (isNearVision) {
+    // For near vision, only accept N values
+    if (value === 'N') return 'N';
+    if (VALID_NEAR_VISION.includes(value)) return value;
+    return null;
+  } else {
+    // For distance vision, ensure proper 6/ format
+    if (!value.startsWith('6/')) {
+      // If it's just a number, try to format it
+      if (/^\d+$/.test(value)) {
+        return `6/${value}`;
+      }
+      return null;
+    }
+    
+    // Extract the number after 6/
+    const numberPart = value.substring(2);
+    // Allow any numeric input after 6/, including empty string for editing
+    if (numberPart === '' || /^\d+$/.test(numberPart)) {
+      return value;
+    }
+    
+    return null;
+  }
+};
+
+/**
+ * Formats a Vn value for display
+ * @param value The input value to format
+ * @param isNearVision Whether this is for near vision (N.V) or distance vision (D.V)
+ * @returns The formatted value
+ */
+export const formatVnValue = (value: string, isNearVision: boolean): string => {
+  if (!value) return '';
+  
+  if (isNearVision) {
+    return value === 'N' ? 'N' : value;
+  } else {
+    // If it's already a valid 6/x format, return as is
+    if (value.startsWith('6/')) {
+      return value;
+    }
+    
+    // If it's just a number, format it
+    if (/^\d+$/.test(value)) {
+      return `6/${value}`;
+    }
+    
+    // If it's empty or invalid, return 6/
+    return '6/';
+  }
 }; 

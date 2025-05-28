@@ -2,7 +2,11 @@ import React, { useEffect } from 'react';
 import Input from '../ui/Input';
 import Checkbox from '../ui/Checkbox';
 import { ContactLensFormData } from './ContactLensTypes';
-import { calculateNearVisionSph } from '../../utils/prescriptionUtils';
+import { 
+  calculateNearVisionSph,
+  validateVnValue,
+  formatVnValue
+} from '../../utils/prescriptionUtils';
 
 interface ContactLensPrescriptionSectionProps {
   formData: ContactLensFormData;
@@ -82,20 +86,46 @@ const ContactLensPrescriptionSection: React.FC<ContactLensPrescriptionSectionPro
 
   // Handle Vn field changes and formatting
   const handleVnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { value } = e.target;
+    const { value, name } = e.target;
     
-    // If value is just a number, format it as 6/x
-    if (/^\d+$/.test(value)) {
-      const formattedValue = `6/${value}`;
-      handleChange({
-        ...e,
-        target: { ...e.target, value: formattedValue }
-      });
+    if (!name) {
+      console.error('[handleVnChange] Missing name on event target:', e.target, e);
+      console.trace();
       return;
     }
-    
-    // Otherwise, just pass through
-    handleChange(e);
+
+    const eye = name.split('.')[0];
+    const isNearVision = name.includes('.nv.vn');
+
+    // Handle N.V row
+    if (isNearVision) {
+      const validatedValue = validateVnValue(value, true);
+      if (validatedValue !== null) {
+        handleChange({
+          target: {
+            name: name,
+            value: validatedValue
+          }
+        } as React.ChangeEvent<HTMLInputElement>);
+      }
+      return;
+    }
+
+    // Handle D.V row
+    if (name.includes('.dv.vn')) {
+      // Always format the value to ensure proper structure
+      const formattedValue = formatVnValue(value, false);
+      
+      // Allow editing by accepting any valid format
+      if (formattedValue.startsWith('6/')) {
+        handleChange({
+          target: {
+            name: name,
+            value: formattedValue
+          }
+        } as React.ChangeEvent<HTMLInputElement>);
+      }
+    }
   };
 
   // Effect to initialize Vn fields with default values
@@ -246,6 +276,7 @@ const ContactLensPrescriptionSection: React.FC<ContactLensPrescriptionSectionPro
                 value={formData.rightEye.dv.vn}
                 onChange={handleVnChange}
                 className="h-8 text-sm text-center text-gray-900 min-w-[50px]"
+                title="Enter distance vision (e.g., 6/6, 6/9, 6/12, 6/18, 6/24, 6/36, 6/60)"
               />
               <Input
                 name="rightEye.dv.rpd"
@@ -289,6 +320,7 @@ const ContactLensPrescriptionSection: React.FC<ContactLensPrescriptionSectionPro
                 value={formData.rightEye.nv.vn}
                 onChange={handleVnChange}
                 className="h-8 text-sm text-center text-gray-900 min-w-[50px]"
+                title="Enter near vision (e.g., N5, N6, N8, N10, N12, N18, N24)"
               />
               <div></div>
               <div className="text-xs text-center text-gray-500">-</div>
@@ -361,6 +393,7 @@ const ContactLensPrescriptionSection: React.FC<ContactLensPrescriptionSectionPro
                 onChange={handleVnChange}
                 className="h-8 text-sm text-center text-gray-900 min-w-[50px]"
                 disabled={formData.balanceLens}
+                title="Enter distance vision (e.g., 6/6, 6/9, 6/12, 6/18, 6/24, 6/36, 6/60)"
               />
               <Input
                 name="leftEye.dv.lpd"
@@ -409,6 +442,7 @@ const ContactLensPrescriptionSection: React.FC<ContactLensPrescriptionSectionPro
                 onChange={handleVnChange}
                 className="h-8 text-sm text-center text-gray-900 min-w-[50px]"
                 disabled={formData.balanceLens}
+                title="Enter near vision (e.g., N5, N6, N8, N10, N12, N18, N24)"
               />
               <div></div>
               <div className="text-xs text-center text-gray-500">-</div>

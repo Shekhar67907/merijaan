@@ -9,7 +9,9 @@ import {
   validateAndFormatVn,
   checkHighPrescription,
   calculateSphericalEquivalent,
-  handleSpecialCases
+  handleSpecialCases,
+  validateVnValue,
+  formatVnValue
 } from '../../utils/prescriptionUtils';
 
 interface PrescriptionSectionProps {
@@ -195,62 +197,60 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
 
   // Handle Vn field changes
   const handleVnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target;
-    let value = input.value;
-    const [eye, row] = input.name.split('.');
+    const { value, name } = e.target;
+    
+    if (!name) {
+      console.error('[handleVnChange] Missing name on event target:', e.target, e);
+      console.trace();
+      return;
+    }
 
-    // Handle N.V row differently
-    if (input.name.includes('.nv.vn')) {
-      handleChange({
-        ...e,
-        target: {
-          ...e.target,
-          value: 'N'
-        }
-      });
+    const eye = name.split('.')[0];
+    const isNearVision = name.includes('.nv.vn');
+
+    // Handle N.V row
+    if (isNearVision) {
+      const validatedValue = validateVnValue(value, true);
+      if (validatedValue !== null) {
+        handleChange({
+          target: {
+            name: name,
+            value: validatedValue
+          }
+        } as React.ChangeEvent<HTMLInputElement>);
+      }
       return;
     }
 
     // Handle D.V row
-    if (input.name.includes('.dv.vn')) {
-      // Remove any non-numeric characters except '/' and '6'
-      value = value.replace(/[^0-9/6]/g, '');
+    if (name.includes('.dv.vn')) {
+      // Always format the value to ensure proper structure
+      const formattedValue = formatVnValue(value, false);
+      
+      // Allow editing by accepting any valid format
+      if (formattedValue.startsWith('6/')) {
+        handleChange({
+          target: {
+            name: name,
+            value: formattedValue
+          }
+        } as React.ChangeEvent<HTMLInputElement>);
 
-      // If value doesn't start with 6/, add it
-      if (!value.startsWith('6/')) {
-        // If user is typing a number directly, prepend 6/
-        if (/^\d+$/.test(value)) {
-          value = `6/${value}`;
-        } else {
-          value = '6/';
-        }
-      }
+        // Update VA status if we have a complete value
+        if (formattedValue.length > 2) {
+          const prescriptionData = {
+            sph: formData[eye as 'rightEye' | 'leftEye'].dv.sph,
+            cyl: formData[eye as 'rightEye' | 'leftEye'].dv.cyl,
+            age: formData.age || 0
+          };
 
-      // Create a new event with the modified value
-      const newEvent = {
-        ...e,
-        target: {
-          ...e.target,
-          value
-        }
-      };
-
-      handleChange(newEvent);
-
-      // Update VA status if we have a complete value
-      if (value.length > 2) {
-        const prescriptionData = {
-          sph: formData[eye as 'rightEye' | 'leftEye'].dv.sph,
-          cyl: formData[eye as 'rightEye' | 'leftEye'].dv.cyl,
-          age: formData.age
-        };
-
-        const vaResult = validateAndFormatVn(value, prescriptionData);
-        if (vaResult) {
-          setVaStatus(prev => ({
-            ...prev,
-            [eye]: vaResult
-          }));
+          const vaResult = validateAndFormatVn(formattedValue, prescriptionData);
+          if (vaResult) {
+            setVaStatus(prev => ({
+              ...prev,
+              [eye]: vaResult
+            }));
+          }
         }
       }
     }

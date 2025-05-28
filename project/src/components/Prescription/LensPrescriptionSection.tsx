@@ -7,7 +7,9 @@ import {
   validateAndFormatVn,
   checkHighPrescription,
   calculateSphericalEquivalent,
-  handleSpecialCases
+  handleSpecialCases,
+  validateVnValue,
+  formatVnValue
 } from '../../utils/prescriptionUtils';
 
 interface LensPrescriptionSectionProps {
@@ -214,69 +216,60 @@ const LensPrescriptionSection: React.FC<LensPrescriptionSectionProps> = ({
   const handleVnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
     let value = input.value;
-    const name = input.name; // Get the original name
+    const name = input.name;
 
-    if (!name) { // Add a guard here too, just in case
+    if (!name) {
       console.error('[handleVnChange] Missing name on event target:', input, e);
       console.trace();
       return;
     }
 
-    // We only need to check which eye we're working with
     const eye = name.split('.')[0];
+    const isNearVision = name.includes('.nv.vn');
 
-    // Handle N.V row differently
-    if (name.includes('.nv.vn')) {
-      // Directly call handleChange with correct structure
-      handleChange({
-        target: {
-          name: name,
-          value: 'N' // N.V Vn is always 'N'
-        }
-      } as React.ChangeEvent<HTMLInputElement>);
+    // Handle N.V row
+    if (isNearVision) {
+      const validatedValue = validateVnValue(value, true);
+      if (validatedValue !== null) {
+        handleChange({
+          target: {
+            name: name,
+            value: validatedValue
+          }
+        } as React.ChangeEvent<HTMLInputElement>);
+      }
       return;
     }
 
     // Handle D.V row
     if (name.includes('.dv.vn')) {
-      // Remove any non-numeric characters except '/' and '6'
-      value = value.replace(/[^0-9/6]/g, '');
+      // Always format the value to ensure proper structure
+      const formattedValue = formatVnValue(value, false);
+      
+      // Allow editing by accepting any valid format
+      if (formattedValue.startsWith('6/')) {
+        handleChange({
+          target: {
+            name: name,
+            value: formattedValue
+          }
+        } as React.ChangeEvent<HTMLInputElement>);
 
-      // If value doesn't start with 6/, add it
-      if (!value.startsWith('6/')) {
-        // If user is typing a number directly, prepend 6/
-        if (/^\d+$/.test(value)) {
-          value = `6/${value}`;
-        } else {
-          value = '6/';
-        }
-      } else if (value.length > 2) {
-        // Format the value using calculateVnDivision for existing 6/ values
-        value = calculateVnDivision(value);
-      }
+        // Update VA status if we have a complete value
+        if (formattedValue.length > 2) {
+          const prescriptionData = {
+            sph: formData[eye as 'rightEye' | 'leftEye'].dv.sph,
+            cyl: formData[eye as 'rightEye' | 'leftEye'].dv.cyl,
+            age: formData.age || 0
+          };
 
-      // Directly call handleChange with correct structure and formatted value
-      handleChange({
-        target: {
-          name: name,
-          value: value
-        }
-      } as React.ChangeEvent<HTMLInputElement>);
-
-      // Update VA status if we have a complete value
-      if (value.length > 2) {
-        const prescriptionData = {
-          sph: formData[eye as 'rightEye' | 'leftEye'].dv.sph,
-          cyl: formData[eye as 'rightEye' | 'leftEye'].dv.cyl,
-          age: formData.age || 0
-        };
-
-        const vaResult = validateAndFormatVn(value, prescriptionData);
-        if (vaResult) {
-          setVaStatus(prev => ({
-            ...prev,
-            [eye]: vaResult
-          }));
+          const vaResult = validateAndFormatVn(formattedValue, prescriptionData);
+          if (vaResult) {
+            setVaStatus(prev => ({
+              ...prev,
+              [eye]: vaResult
+            }));
+          }
         }
       }
     }
@@ -498,6 +491,7 @@ const LensPrescriptionSection: React.FC<LensPrescriptionSectionProps> = ({
                     onKeyDown={handleVnKeyDown} 
                     className="text-center text-sm"
                     placeholder="6/"
+                    title="Enter distance vision (e.g., 6/6, 6/9, 6/12, 6/18, 6/24, 6/36, 6/60)"
                   />
                   {vaStatus.rightEye?.comparisonToExpected && (
                     <div className={`absolute -bottom-6 left-0 right-0 text-xs px-1 ${
@@ -537,8 +531,9 @@ const LensPrescriptionSection: React.FC<LensPrescriptionSectionProps> = ({
                   <Input 
                     value={formData.rightEye.nv.vn} 
                     name="rightEye.nv.vn" 
-                    onChange={handleChange}
+                    onChange={handleVnChange}
                     className="text-center text-sm"
+                    title="Enter near vision (e.g., N5, N6, N8, N10, N12, N18, N24)"
                   />
                 </td>
                 <td className="border border-gray-300 p-1"></td>
@@ -595,6 +590,7 @@ const LensPrescriptionSection: React.FC<LensPrescriptionSectionProps> = ({
                     onKeyDown={handleVnKeyDown}
                     className="text-center text-sm"
                     placeholder="6/"
+                    title="Enter distance vision (e.g., 6/6, 6/9, 6/12, 6/18, 6/24, 6/36, 6/60)"
                   />
                   {vaStatus.leftEye?.comparisonToExpected && (
                     <div className={`absolute -bottom-6 left-0 right-0 text-xs px-1 ${
@@ -634,8 +630,9 @@ const LensPrescriptionSection: React.FC<LensPrescriptionSectionProps> = ({
                   <Input 
                     value={formData.leftEye.nv.vn} 
                     name="leftEye.nv.vn" 
-                    onChange={handleChange}
+                    onChange={handleVnChange}
                     className="text-center text-sm"
+                    title="Enter near vision (e.g., N5, N6, N8, N10, N12, N18, N24)"
                   />
                 </td>
                 <td className="border border-gray-300 p-1 text-right">
