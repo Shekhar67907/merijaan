@@ -13,6 +13,7 @@ import ContactLensItemTable from './ContactLensItemTable';
 import ContactLensOrderStatus from './ContactLensOrderStatus';
 import ContactLensPayment from './ContactLensPayment';
 import { ContactLensFormData, ContactLensItem } from './ContactLensTypes';
+import ToastNotification from '../ui/ToastNotification';
 
 
 
@@ -97,6 +98,8 @@ const initialContactLensForm: ContactLensFormData = {
 const ContactLensPage: React.FC = () => {
   const [formData, setFormData] = useState<ContactLensFormData>(initialContactLensForm);
   const [showManualForm, setShowManualForm] = useState(false);
+  const [discountPercentage, setDiscountPercentage] = useState<string>('');
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | ''; visible: boolean }>({ message: '', type: '', visible: false });
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     // Extract name and value, but don't destructure to avoid issues with undefined
@@ -192,28 +195,75 @@ const ContactLensPage: React.FC = () => {
     handleChange(syntheticEvent);
   };
 
-  const calculateTotal = () => {
-    const total = formData.contactLensItems.reduce((sum, item) => sum + item.amount, 0);
+  const calculateTotal = (items: ContactLensItem[], currentAdvance: string) => {
+    const originalTotal = items.reduce((sum, item) => sum + (item.qty * item.rate), 0);
+    const discountedTotal = items.reduce((sum, item) => {
+      // Assuming item.amount is already updated with discount by handleApplyDiscount
+      return sum + item.amount;
+    }, 0);
+
+    const advanceTotal = parseFloat(currentAdvance || '0');
+
+    // Assuming Sch Amt shows the discount amount
+    const schemeAmount = originalTotal - discountedTotal;
+    const finalBalance = discountedTotal - advanceTotal;
     
     setFormData(prev => ({
       ...prev,
-      estimate: total.toFixed(2),
-      balance: (total - parseFloat(prev.advance || '0')).toFixed(2)
+      estimate: originalTotal.toFixed(2), // Original total before discount
+      schAmt: schemeAmount.toFixed(2),   // Calculated discount amount
+      payment: discountedTotal.toFixed(2), // Final total after discount
+      balance: finalBalance.toFixed(2)
     }));
   };
 
-  // Update balance when advance changes
-  useEffect(() => {
-    const advanceTotal = parseFloat(formData.cashAdv) + 
-                         parseFloat(formData.ccUpiAdv) + 
-                         parseFloat(formData.chequeAdv);
-    
+  const handleApplyDiscount = () => {
+    const discount = parseFloat(discountPercentage);
+    if (isNaN(discount) || discount < 0 || discount > 100) {
+      // Replace alert with showing error notification
+      setNotification({ message: 'Please enter a valid discount percentage between 0 and 100.', type: 'error', visible: true });
+      return;
+    }
+
+    const updatedItems = formData.contactLensItems.map(item => ({
+      ...item,
+      amount: item.qty * item.rate * (1 - discount / 100) // Update item amount with discount
+    }));
+
     setFormData(prev => ({
       ...prev,
-      advance: advanceTotal.toFixed(2),
-      balance: (parseFloat(prev.estimate) - advanceTotal).toFixed(2)
+      contactLensItems: updatedItems
     }));
-  }, [formData.cashAdv, formData.ccUpiAdv, formData.chequeAdv, formData.estimate]);
+    // Recalculate total using the updated items and current advance
+    calculateTotal(updatedItems, formData.advance);
+
+    // Add success notification
+    setNotification({ message: 'Discount applied successfully!', type: 'success', visible: true });
+  };
+
+  // Update balance when advance or payment changes
+  useEffect(() => {
+    const cash = parseFloat(formData.cashAdv || '0');
+    const ccUpi = parseFloat(formData.ccUpiAdv || '0');
+    const cheque = parseFloat(formData.chequeAdv || '0');
+    
+    // This calculatedAdvanceTotal is only for reference or potential display elsewhere.
+    // The actual advance used for balance calculation is formData.advance.
+    // const calculatedAdvanceTotal = cash + ccUpi + cheque;
+    
+    const currentDiscountedTotal = parseFloat(formData.payment || '0');
+    const currentAdvance = parseFloat(formData.advance || '0');
+    
+    const finalBalance = currentDiscountedTotal - currentAdvance;
+    
+    setFormData(prev => ({
+        ...prev,
+        // We no longer force formData.advance to be the sum of the other three here.
+        // handleNumericInputChange handles updating formData.advance when typed into.
+        balance: finalBalance.toFixed(2)
+    }));
+    
+  }, [formData.cashAdv, formData.ccUpiAdv, formData.chequeAdv, formData.payment, formData.advance]); // Added formData.advance as a dependency
 
   // Effect to calculate IPD from RPD and LPD
   useEffect(() => {
@@ -243,16 +293,17 @@ const ContactLensPage: React.FC = () => {
     const newItems = [...formData.contactLensItems, {
       ...item, 
       si: formData.contactLensItems.length + 1,
-      amount: item.qty * item.rate
+      amount: item.qty * item.rate // Initial amount before discount
     }];
     
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       contactLensItems: newItems
-    });
+    }));
     
     setShowManualForm(false);
-    calculateTotal();
+    // Recalculate total after adding item (before discount is applied)
+    calculateTotal(newItems, formData.advance);
   };
 
   return (
@@ -387,7 +438,7 @@ const ContactLensPage: React.FC = () => {
             items={formData.contactLensItems}
             setItems={(items) => {
               setFormData({ ...formData, contactLensItems: items });
-              calculateTotal();
+              calculateTotal(items, formData.advance);
             }}
           />
         </div>
@@ -405,6 +456,9 @@ const ContactLensPage: React.FC = () => {
             formData={formData}
             handleChange={handleChange}
             handleNumericInputChange={handleNumericInputChange}
+            discountPercentage={discountPercentage}
+            setDiscountPercentage={setDiscountPercentage}
+            handleApplyDiscount={handleApplyDiscount}
           />
         </div>
         
@@ -417,6 +471,14 @@ const ContactLensPage: React.FC = () => {
           <Button>&lt;&lt; Exit &gt;&gt;</Button>
         </div>
       </Card>
+      
+      {/* Render the Toast Notification */}
+      <ToastNotification 
+        message={notification.message}
+        type={notification.type}
+        visible={notification.visible}
+        onClose={() => setNotification({ ...notification, visible: false })}
+      />
       
       {/* Manual Entry Form Popup */}
       {showManualForm && (

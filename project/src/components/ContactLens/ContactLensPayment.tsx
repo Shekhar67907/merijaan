@@ -7,12 +7,18 @@ interface ContactLensPaymentProps {
   formData: ContactLensFormData;
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   handleNumericInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  discountPercentage: string;
+  setDiscountPercentage: (value: string) => void;
+  handleApplyDiscount: () => void;
 }
 
 const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
   formData,
   handleChange,
   handleNumericInputChange,
+  discountPercentage,
+  setDiscountPercentage,
+  handleApplyDiscount,
 }) => {
   const paymentMethods = [
     { label: 'Select Payment Method', value: '' },
@@ -27,11 +33,21 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
     <div className="border rounded p-4">
       <div className="flex justify-between mb-4">
         <span className="text-sm font-medium text-gray-700">Payment</span>
-        <div>
-          <button className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded mr-1">
-            Apply same discount % to all items above:
-          </button>
-          <button className="bg-green-500 text-white text-xs px-2 py-1 rounded">
+        <div className="flex items-center">
+          <span className="text-sm font-medium text-gray-700 mr-1">Apply same discount % to all items above:</span>
+          <Input
+            type="number"
+            value={discountPercentage}
+            onChange={(e) => setDiscountPercentage(e.target.value)}
+            className="w-16 h-7 text-xs text-center mr-1"
+            placeholder="0"
+            min="0"
+            max="100"
+          />
+          <button 
+            onClick={handleApplyDiscount}
+            className="bg-green-500 text-white text-xs px-2 py-1 rounded"
+          >
             Apply Disc
           </button>
         </div>
@@ -46,6 +62,7 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="payment"
                 value={formData.payment}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-blue-50 h-8"
               />
@@ -55,6 +72,7 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="estimate"
                 value={formData.estimate}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-blue-50 h-8"
               />
@@ -67,6 +85,7 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="schAmt"
                 value={formData.schAmt}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-blue-50 h-8"
               />
@@ -76,9 +95,9 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="advance"
                 value={formData.advance}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-blue-50 h-8"
-                readOnly
               />
             </div>
           </div>
@@ -88,9 +107,9 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
             <Input
               name="balance"
               value={formData.balance}
+              placeholder="0.00"
               onChange={handleNumericInputChange}
               className="bg-blue-50 h-8"
-              readOnly
             />
           </div>
         </div>
@@ -103,6 +122,7 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="cashAdv"
                 value={formData.cashAdv}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-gray-50 h-8"
               />
@@ -111,6 +131,7 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="cashAdv2"
                 value={formData.cashAdv2}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-gray-50 h-8"
               />
@@ -123,6 +144,7 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="ccUpiAdv"
                 value={formData.ccUpiAdv}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-gray-50 h-8"
               />
@@ -130,10 +152,10 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
             <div>
               <Select
                 name="paymentMethod"
-                value=""
+                value={formData.paymentMethod}
                 onChange={handleChange}
                 options={paymentMethods}
-                className="h-8 mt-auto"
+                className="mt-auto"
               />
             </div>
           </div>
@@ -144,6 +166,7 @@ const ContactLensPayment: React.FC<ContactLensPaymentProps> = ({
               <Input
                 name="chequeAdv"
                 value={formData.chequeAdv}
+                placeholder="0.00"
                 onChange={handleNumericInputChange}
                 className="bg-gray-50 h-8"
               />

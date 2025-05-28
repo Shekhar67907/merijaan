@@ -12,6 +12,7 @@ import PrescriptionSection from './PrescriptionSection';
 import RemarksAndStatusSection from './RemarksAndStatusSection';
 import PaymentSection from './PaymentSection';
 import { PrescriptionFormData } from '../types';
+import ToastNotification from '../ui/ToastNotification';
 
 // Define interfaces for form data and table rows
 interface PrescriptionEyeData {
@@ -210,6 +211,7 @@ const OrderCardForm: React.FC = () => {
   const [retestAfterChecked, setRetestAfterChecked] = useState(false);
   const [showItemSelectionPopup, setShowItemSelectionPopup] = useState(false);
   const [selectedItemType, setSelectedItemType] = useState<'Frames' | 'Sun Glasses'>('Frames');
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | ''; visible: boolean }>({ message: '', type: '', visible: false });
 
   // Effect to calculate Item Amount in manual entry popup
   useEffect(() => {
@@ -441,7 +443,8 @@ const OrderCardForm: React.FC = () => {
   const handleApplyDiscount = () => {
     const discountValue = parseFloat(formData.applyDiscount || '0');
     if (discountValue <= 0) {
-      alert('Please enter a valid discount value (greater than 0)');
+      // Replace alert with error notification
+      setNotification({ message: 'Please enter a valid discount value (greater than 0)', type: 'error', visible: true });
       return;
     }
     const totalBeforeDiscount = formData.selectedItems.reduce(
@@ -449,7 +452,8 @@ const OrderCardForm: React.FC = () => {
       0
     );
     if (totalBeforeDiscount <= 0) {
-      alert('No items to apply discount to');
+      // Replace alert with error notification
+      setNotification({ message: 'No items to apply discount to', type: 'error', visible: true });
       return;
     }
     const discountType = formData.discountType || 'percentage';
@@ -474,7 +478,8 @@ const OrderCardForm: React.FC = () => {
       applyDiscount: '',
       paymentEstimate: (totalBeforeDiscount - discountAmount).toFixed(2)
     }));
-    alert(`Successfully applied ${discountType === 'percentage' ? `${discountValue}%` : `$${discountValue.toFixed(2)}`} discount`);
+    // Replace alert with success notification
+    setNotification({ message: `Successfully applied ${discountType === 'percentage' ? `${discountValue}%` : `$${discountValue.toFixed(2)}`} discount`, type: 'success', visible: true });
   };
 
   const handleItemDiscountChange = (index: number, type: 'percentage' | 'fixed', value: string) => {
@@ -943,6 +948,14 @@ const OrderCardForm: React.FC = () => {
         </div>
 
       </Card>
+
+      {/* Render the Toast Notification */}
+      <ToastNotification
+        message={notification.message}
+        type={notification.type}
+        visible={notification.visible}
+        onClose={() => setNotification({ ...notification, visible: false })}
+      />
 
       {/* Item Selection Popup */}
       {showItemSelectionPopup && (
