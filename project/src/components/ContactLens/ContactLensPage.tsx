@@ -340,7 +340,7 @@ const ContactLensPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <Input
-                  type="date"
+                  type="datetime-local"
                   label="Date"
                   name="date"
                   value={formData.date}
@@ -361,7 +361,7 @@ const ContactLensPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <Input
-                  type="date"
+                  type="datetime-local"
                   label="Dlv. Date"
                   name="dvDate"
                   value={formData.dvDate}

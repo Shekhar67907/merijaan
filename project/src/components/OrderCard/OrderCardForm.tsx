@@ -202,6 +202,15 @@ const initialFormState: PrescriptionFormData = {
   manualEntryItemAmount: 0
 };
 
+// Add this helper function at the top of the file, after imports
+const formatDateForInput = (date: string): string => {
+  if (!date) return '';
+  // If the date is already in datetime-local format, return as is
+  if (date.includes('T')) return date;
+  // Otherwise, append the time component
+  return `${date}T00:00`;
+};
+
 const OrderCardForm: React.FC = () => {
   const [formData, setFormData] = useState<PrescriptionFormData>(initialFormState);
 
@@ -212,6 +221,7 @@ const OrderCardForm: React.FC = () => {
   const [showItemSelectionPopup, setShowItemSelectionPopup] = useState(false);
   const [selectedItemType, setSelectedItemType] = useState<'Frames' | 'Sun Glasses'>('Frames');
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({ message: '', type: 'success', visible: false });
+  const [searchQuery, setSearchQuery] = useState({ prescriptionNo: '', referenceNo: '', name: '', phone: '' });
 
   // Effect to calculate Item Amount in manual entry popup
   useEffect(() => {
@@ -288,6 +298,17 @@ const OrderCardForm: React.FC = () => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
+    // Format date values when they change
+    if (name === 'currentDateTime' || name === 'deliveryDateTime' || 
+        name === 'orderStatusDate' || name === 'retestAfter' || 
+        name === 'cashAdv2Date') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: formatDateForInput(value)
+      }));
+      return;
+    }
+
     if (name.includes('.')) {
       // Handle nested properties (e.g., "rightEye.dv.sph")
       const parts = name.split('.');
@@ -539,6 +560,91 @@ const OrderCardForm: React.FC = () => {
     }));
   };
 
+  const handleSearch = async (field: string, value: string) => {
+    console.log(`[handleSearch] Searching by ${field} with value: ${value}`);
+    if (!value.trim()) {
+      setNotification({
+        message: 'Please enter a search value',
+        type: 'error',
+        visible: true
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/prescriptions/search?${field}=${encodeURIComponent(value)}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to search prescription');
+      }
+
+      // Update form data with the found prescription
+      setFormData(prevData => ({
+        ...prevData,
+        prescriptionNo: data.prescriptionNo || '',
+        referenceNo: data.referenceNo || '',
+        name: data.name || '',
+        age: data.age || '',
+        gender: data.gender || '',
+        mobileNo: data.mobileNo || '',
+        phoneLandline: data.phoneLandline || '',
+        address: data.address || '',
+        rightEye: {
+          ...prevData.rightEye,
+          dv: {
+            ...prevData.rightEye.dv,
+            sph: data.rightEye?.dv?.sph || '',
+            cyl: data.rightEye?.dv?.cyl || '',
+            ax: data.rightEye?.dv?.ax || '',
+            rpd: data.rightEye?.dv?.rpd || '',
+            lpd: data.rightEye?.dv?.lpd || '',
+            add: data.rightEye?.dv?.add || ''
+          },
+          nv: {
+            ...prevData.rightEye.nv,
+            sph: data.rightEye?.nv?.sph || '',
+            cyl: data.rightEye?.nv?.cyl || '',
+            ax: data.rightEye?.nv?.ax || '',
+            add: data.rightEye?.nv?.add || ''
+          }
+        },
+        leftEye: {
+          ...prevData.leftEye,
+          dv: {
+            ...prevData.leftEye.dv,
+            sph: data.leftEye?.dv?.sph || '',
+            cyl: data.leftEye?.dv?.cyl || '',
+            ax: data.leftEye?.dv?.ax || '',
+            rpd: data.leftEye?.dv?.rpd || '',
+            lpd: data.leftEye?.dv?.lpd || '',
+            add: data.leftEye?.dv?.add || ''
+          },
+          nv: {
+            ...prevData.leftEye.nv,
+            sph: data.leftEye?.nv?.sph || '',
+            cyl: data.leftEye?.nv?.cyl || '',
+            ax: data.leftEye?.nv?.ax || '',
+            add: data.leftEye?.nv?.add || ''
+          }
+        }
+      }));
+
+      setNotification({
+        message: 'Prescription found and form updated',
+        type: 'success',
+        visible: true
+      });
+    } catch (error) {
+      console.error('Search error:', error);
+      setNotification({
+        message: error instanceof Error ? error.message : 'Failed to search prescription',
+        type: 'error',
+        visible: true
+      });
+    }
+  };
+
   return (
     <form onSubmit={handleOrderCardSubmit} className="w-full max-w-screen-xl mx-auto p-4 bg-gray-100 font-sans text-sm">
       <Card className="mb-4 p-4 shadow-lg rounded-md bg-white border border-gray-200">
@@ -559,8 +665,20 @@ const OrderCardForm: React.FC = () => {
           <div className="grid grid-cols-1 gap-3 text-gray-700 border p-4 rounded bg-blue-50 shadow-sm">
             <Input label="Prescription No.:" value={formData.prescriptionNo} name="prescriptionNo" onChange={handleChange} readOnly />
             <Input label="Reference No.:" value={formData.referenceNo} name="referenceNo" onChange={handleChange} />
-            <Input label="Current Date/Time:" value={formData.currentDateTime} name="currentDateTime" onChange={handleChange} readOnly />
-            <Input label="Delivery Date/Time:" value={formData.deliveryDateTime} name="deliveryDateTime" onChange={handleChange} type="datetime-local"/>
+            <Input
+              type="datetime-local"
+              label="Current Date/Time"
+              name="currentDateTime"
+              value={formData.currentDateTime}
+              onChange={handleChange}
+            />
+            <Input
+              type="datetime-local"
+              label="Delivery Date/Time"
+              name="deliveryDateTime"
+              value={formData.deliveryDateTime}
+              onChange={handleChange}
+            />
             <Select label="Class:" options={classOptions} value={formData.class} name="class" onChange={handleChange} />
             <Input label="Booking By:" value={formData.bookingBy} name="bookingBy" onChange={handleChange} />
           </div>
@@ -811,8 +929,7 @@ const OrderCardForm: React.FC = () => {
                                         value={formData.orderStatusDate} 
                                         name="orderStatusDate" 
                                         onChange={handleChange} 
-                                        type="date" 
-                                        className="text-sm"
+                                        type="datetime-local"
                                     />
                                 </div>
                             </div>
@@ -838,7 +955,7 @@ const OrderCardForm: React.FC = () => {
                                         value={formData.retestAfter}
                                         name="retestAfter"
                                         onChange={handleChange}
-                                        type="date"
+                                        type="datetime-local"
                                         className="text-sm flex-1 min-w-0"
                                         disabled={!retestAfterChecked}
                                         label=""
@@ -949,7 +1066,7 @@ const OrderCardForm: React.FC = () => {
                               value={formData.cashAdv2Date}
                               name="cashAdv2Date"
                               onChange={handleChange}
-                              type="date"
+                              type="datetime-local"
                               className="text-sm w-full"
                             />
                         </div>
