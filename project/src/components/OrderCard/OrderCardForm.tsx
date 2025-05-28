@@ -22,15 +22,23 @@ interface SearchSuggestion extends PrescriptionFormData {
   status: string; // Make status required to match PrescriptionFormData
 }
 
-// Helper function to format date for datetime-local input
-const formatDateForInput = (date: string | null | undefined): string => {
+// Helper function to format date for input fields
+const formatDateForInput = (date: string | null | undefined, format: 'date' | 'datetime-local' = 'date'): string => {
   if (!date) return '';
-  // Ensure date is a string before trying to include('T')
+  // Ensure date is a string before proceeding
   if (typeof date !== 'string') return '';
-  // If the date is already in datetime-local format, return as is
-  if (date.includes('T')) return date;
-  // Otherwise, append the time component (assuming midnight if no time is available)
-  return `${date}T00:00`;
+  
+  // Extract just the date part if there's a time component
+  const datePart = date.includes('T') ? date.split('T')[0] : date;
+  
+  // Return appropriate format based on the format parameter
+  if (format === 'datetime-local') {
+    // For datetime-local inputs, append time if not already present
+    return date.includes('T') ? date : `${datePart}T00:00`;
+  } else {
+    // For date inputs, return just the date part
+    return datePart;
+  }
 };
 
 // Initial form state with proper nested structure and default datetime-local format
@@ -38,9 +46,9 @@ const formatDateForInput = (date: string | null | undefined): string => {
 const initialFormState: PrescriptionFormData = {
   prescriptionNo: '',
   referenceNo: '',
-  currentDateTime: formatDateForInput(getTodayDate()),
-  deliveryDateTime: formatDateForInput(getNextMonthDate()),
-  date: getTodayDate(), // Assuming date is just date in PrescriptionFormData
+  currentDateTime: formatDateForInput(getTodayDate(), 'datetime-local'),
+  deliveryDateTime: formatDateForInput(getNextMonthDate(), 'datetime-local'),
+  date: formatDateForInput(getTodayDate()), // Using date format
   class: '',
   bookingBy: '',
   namePrefix: 'Mr.',
@@ -82,7 +90,7 @@ const initialFormState: PrescriptionFormData = {
     underCorrected: false
   },
   orderStatus: 'Processing',
-  orderStatusDate: formatDateForInput(getTodayDate()),
+  orderStatusDate: formatDateForInput(getTodayDate(), 'datetime-local'),
   retestAfter: '',
   billNo: '',
   paymentEstimate: '0.00',
@@ -94,7 +102,7 @@ const initialFormState: PrescriptionFormData = {
   ccUpiAdv: '0.00',
   chequeAdv: '0.00',
   cashAdv2: '0.00',
-  cashAdv2Date: formatDateForInput(getTodayDate()),
+  cashAdv2Date: formatDateForInput(getTodayDate(), 'datetime-local'),
 
   // Keep discount fields, although their usage needs confirmation
   applyDiscount: '',
@@ -247,10 +255,15 @@ const OrderCardForm: React.FC = () => {
 
         console.log(`Searching for ${column} containing: ${query}`);
         
-        // Use Supabase to query the database
+        // Use Supabase to query the database with join to eye_prescriptions and prescription_remarks
+        console.log(`Executing query for ${column}=${query}`);
         let { data, error } = await supabase
           .from('prescriptions')
-          .select('*')
+          .select(`
+            *,
+            eye_prescriptions(id, prescription_id, eye_type, vision_type, sph, cyl, ax, add_power, vn, rpd, lpd),
+            prescription_remarks(*)
+          `)
           .eq(column, query) // For exact match
           .limit(5);
           
@@ -258,7 +271,11 @@ const OrderCardForm: React.FC = () => {
         if ((!data || data.length === 0) && (column === 'name' || column === 'mobile_no')) {
           const result = await supabase
             .from('prescriptions')
-            .select('*')
+            .select(`
+              *,
+              eye_prescriptions(id, prescription_id, eye_type, vision_type, sph, cyl, ax, add_power, vn, rpd, lpd),
+              prescription_remarks(*)
+            `)
             .ilike(column, `%${query}%`) // For partial match
             .limit(5);
             
@@ -284,9 +301,117 @@ const OrderCardForm: React.FC = () => {
         }
           
         console.log('Search results:', data);
+        console.log('Raw data with eye_prescriptions:', data);
+      
+      // Transformation of database results to match your interface including eye prescriptions
+      const transformedData: SearchSuggestion[] = data.map((item: any) => {
+        // Check if eye_prescriptions and prescription_remarks arrays exist
+        const eyePrescriptions = item.eye_prescriptions || [];
+        const prescriptionRemarks = item.prescription_remarks || [];
         
-        // Basic transformation of database results to match your interface
-        const transformedData: SearchSuggestion[] = data.map((item: any) => ({
+        // Helper function to find eye prescription data
+        const findEyeData = (eyeType: string, visionType: string, field: string, defaultValue: string = '') => {
+          // Log the eyePrescriptions array for debugging
+          if (eyeType === 'right' && visionType === 'distance' && field === 'sph') {
+            console.log('Eye Prescriptions array:', eyePrescriptions);
+            console.log('Looking for records with eye_type:', eyeType, 'vision_type:', visionType);
+            
+            // Detailed inspection of the first record to see field names
+            if (eyePrescriptions.length > 0) {
+              console.log('First record field names:', Object.keys(eyePrescriptions[0]));
+              console.log('First record eye_type value:', eyePrescriptions[0].eye_type);
+              console.log('First record vision_type value:', eyePrescriptions[0].vision_type);
+            }
+          }
+          
+          // Convert to lowercase and handle potential differences in field naming
+          const prescription = eyePrescriptions.find((ep: any) => {
+            // Check for various field name possibilities
+            const recordEyeType = ep.eye_type || ep.eyeType || ep.eye;
+            const recordVisionType = ep.vision_type || ep.visionType || ep.type;
+            
+            // Log each record for debugging
+            if (eyeType === 'right' && visionType === 'distance' && field === 'sph') {
+              console.log(`Checking record:`, ep);
+              console.log(`Record eye type: ${recordEyeType}, Record vision type: ${recordVisionType}`);
+              console.log(`Comparing with: ${eyeType}, ${visionType}`);
+            }
+            
+            // Map vision types from UI format to database format
+            const visionTypeMap: {[key: string]: string[]} = {
+              'distance': ['distance', 'dv', 'distance_vision'],
+              'near': ['near', 'nv', 'near_vision']
+            };
+            
+            // Check if eye type matches
+            const eyeTypeMatches = String(recordEyeType).toLowerCase() === eyeType.toLowerCase();
+            
+            // Check if vision type matches any of the possible formats
+            let visionTypeMatches = false;
+            if (visionType in visionTypeMap) {
+              visionTypeMatches = visionTypeMap[visionType].includes(String(recordVisionType).toLowerCase());
+            } else {
+              visionTypeMatches = String(recordVisionType).toLowerCase() === visionType.toLowerCase();
+            }
+            
+            return eyeTypeMatches && visionTypeMatches;
+          });
+          
+          // Log the found prescription for debugging
+          if (eyeType === 'right' && visionType === 'distance' && field === 'sph') {
+            console.log(`Found prescription for ${eyeType} eye, ${visionType} vision:`, prescription);
+          }
+          
+          // If we found a matching prescription, extract the requested field
+          if (prescription) {
+            // Handle field name variations
+            let fieldValue = null;
+            
+            // Map UI field names to possible database field names
+            const fieldMappings: {[key: string]: string[]} = {
+              'sph': ['sph', 'sphere'],
+              'cyl': ['cyl', 'cylinder'],
+              'ax': ['ax', 'axis'],
+              'add_power': ['add_power', 'add', 'addition'],
+              'vn': ['vn', 'visual_acuity', 'va'],
+              'rpd': ['rpd', 'right_pd', 'pupillary_distance_right'],
+              'lpd': ['lpd', 'left_pd', 'pupillary_distance_left']
+            };
+            
+            // Try all possible field name variations
+            if (field in fieldMappings) {
+              for (const possibleField of fieldMappings[field]) {
+                if (prescription[possibleField] !== undefined) {
+                  fieldValue = prescription[possibleField];
+                  break;
+                }
+              }
+            } else {
+              // If not in our mappings, try direct access
+              fieldValue = prescription[field];
+            }
+            
+            // Special case for add_power
+            if (field === 'add_power') {
+              console.log(`Found possible add values:`, {
+                add_power: prescription.add_power,
+                add: prescription.add,
+                addition: prescription.addition
+              });
+            }
+            
+            return fieldValue || defaultValue;
+          }
+          
+          return defaultValue;
+        };
+        
+        // Helper function to check if a remark type exists
+        const hasRemarkType = (remarkType: string) => {
+          return prescriptionRemarks.some((r: any) => r.remark_type === remarkType);
+        };
+        
+        return {
           id: item.id,
           prescriptionNo: item.prescription_no || '',
           referenceNo: item.reference_no || '',
@@ -301,8 +426,8 @@ const OrderCardForm: React.FC = () => {
           date: item.date || '',
           class: item.class || '',
           prescribedBy: item.prescribed_by || '',
-          birthDay: item.birth_day || '',
-          marriageAnniversary: item.marriage_anniversary || '',
+          birthDay: item.birth_day ? formatDateForInput(item.birth_day) : '',
+          marriageAnniversary: item.marriage_anniversary ? formatDateForInput(item.marriage_anniversary) : '',
           address: item.address || '',
           city: item.city || '',
           state: item.state || '',
@@ -314,25 +439,51 @@ const OrderCardForm: React.FC = () => {
           namePrefix: item.title || 'Mr.',
           billed: false,
           balanceLens: item.balance_lens || false,
-          // Default values for missing fields
-          rightEye: { 
-            dv: { sph: '', cyl: '', ax: '', add: '', vn: '6/', rpd: '' },
-            nv: { sph: '', cyl: '', ax: '', add: '', vn: 'N' } 
+          // Extract eye prescription data using helper function
+          rightEye: {
+            dv: {
+              sph: findEyeData('right', 'distance', 'sph'),
+              cyl: findEyeData('right', 'distance', 'cyl'),
+              ax: findEyeData('right', 'distance', 'ax'),
+              add: findEyeData('right', 'distance', 'add_power'), // Database field is add_power, maps to add in our interface
+              vn: findEyeData('right', 'distance', 'vn', '6/'),
+              rpd: findEyeData('right', 'distance', 'rpd')
+            },
+            nv: {
+              sph: findEyeData('right', 'near', 'sph'),
+              cyl: findEyeData('right', 'near', 'cyl'),
+              ax: findEyeData('right', 'near', 'ax'),
+              add: findEyeData('right', 'near', 'add_power'), // Database field is add_power, maps to add in our interface
+              vn: findEyeData('right', 'near', 'vn', 'N')
+            }
           },
-          leftEye: { 
-            dv: { sph: '', cyl: '', ax: '', add: '', vn: '6/', lpd: '' },
-            nv: { sph: '', cyl: '', ax: '', add: '', vn: 'N' } 
+          leftEye: {
+            dv: {
+              sph: findEyeData('left', 'distance', 'sph'),
+              cyl: findEyeData('left', 'distance', 'cyl'),
+              ax: findEyeData('left', 'distance', 'ax'),
+              add: findEyeData('left', 'distance', 'add_power'), // Database field is add_power, maps to add in our interface
+              vn: findEyeData('left', 'distance', 'vn', '6/'),
+              lpd: findEyeData('left', 'distance', 'lpd')
+            },
+            nv: {
+              sph: findEyeData('left', 'near', 'sph'),
+              cyl: findEyeData('left', 'near', 'cyl'),
+              ax: findEyeData('left', 'near', 'ax'),
+              add: findEyeData('left', 'near', 'add_power'), // Database field is add_power, maps to add in our interface
+              vn: findEyeData('left', 'near', 'vn', 'N')
+            }
           },
           remarks: {
-            forConstantUse: false,
-            forDistanceVisionOnly: false,
-            forNearVisionOnly: false,
-            separateGlasses: false,
-            biFocalLenses: false,
-            progressiveLenses: false,
-            antiReflectionLenses: false,
-            antiRadiationLenses: false,
-            underCorrected: false
+            forConstantUse: hasRemarkType('for_constant_use'),
+            forDistanceVisionOnly: hasRemarkType('for_distance_vision_only'),
+            forNearVisionOnly: hasRemarkType('for_near_vision_only'),
+            separateGlasses: hasRemarkType('separate_glasses'),
+            biFocalLenses: hasRemarkType('bifocal_lenses'),
+            progressiveLenses: hasRemarkType('progressive_lenses'),
+            antiReflectionLenses: hasRemarkType('anti_reflection_lenses'),
+            antiRadiationLenses: hasRemarkType('anti_radiation_lenses'),
+            underCorrected: hasRemarkType('under_corrected')
           },
           selectedItems: [],
           orderStatus: 'Processing',
@@ -363,7 +514,8 @@ const OrderCardForm: React.FC = () => {
           others: '',
           currentDateTime: '',
           deliveryDateTime: ''
-        }));
+        };
+      });
           
         setSuggestions(transformedData);
       } catch (error) {
@@ -374,11 +526,8 @@ const OrderCardForm: React.FC = () => {
           visible: true
         });
         setSuggestions([]);
-      } finally {
-         // Reset loading state
-        // setIsLoading(false);
       }
-    }, 300); // Debounce delay
+    }, 300);
   };
 
   // Handle input change for search fields
@@ -440,7 +589,7 @@ const OrderCardForm: React.FC = () => {
           sph: suggestion.rightEye?.dv?.sph || '',
           cyl: suggestion.rightEye?.dv?.cyl || '',
           ax: suggestion.rightEye?.dv?.ax || '',
-          add: suggestion.rightEye?.dv?.add || '',
+          add: suggestion.rightEye?.dv?.add || '', // maps to add_power in the database
           vn: suggestion.rightEye?.dv?.vn || '6/', // Default if empty
           rpd: suggestion.rightEye?.dv?.rpd || ''
         },
@@ -449,7 +598,7 @@ const OrderCardForm: React.FC = () => {
           sph: suggestion.rightEye?.nv?.sph || '',
           cyl: suggestion.rightEye?.nv?.cyl || '',
           ax: suggestion.rightEye?.nv?.ax || '',
-          add: suggestion.rightEye?.nv?.add || '',
+          add: suggestion.rightEye?.nv?.add|| '',
           vn: suggestion.rightEye?.nv?.vn || 'N' // Default if empty
         }
       },
