@@ -93,6 +93,7 @@ const initialContactLensForm: ContactLensFormData = {
   chequeAdv: '0.00',
   cashAdv2: '0.00',
   advDate: getTodayDate(),
+  paymentMethod: 'Cash',
 };
 
 const ContactLensPage: React.FC = () => {

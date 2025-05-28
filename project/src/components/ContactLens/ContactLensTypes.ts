@@ -79,4 +79,5 @@ export interface ContactLensFormData {
   chequeAdv: string;
   cashAdv2: string;
   advDate: string;
+  paymentMethod: string;
 }

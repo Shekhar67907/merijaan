@@ -13,6 +13,8 @@ import RemarksAndStatusSection from './RemarksAndStatusSection';
 import PaymentSection from './PaymentSection';
 import { PrescriptionFormData, PrescriptionData, SelectedItem } from '../types';
 import ToastNotification from '../ui/ToastNotification';
+// Import Supabase client
+import { supabase } from '../../utils/supabaseClient';
 
 // Interface for the structure of a search suggestion (based on API response which is a full Prescription object)
 interface SearchSuggestion extends PrescriptionFormData {
@@ -109,8 +111,8 @@ const initialFormState: PrescriptionFormData = {
 
   // Assuming these are also part of PrescriptionFormData based on your initial state
   others: '',
-  status: '', // Assuming a status field exists based on linter error (might be for RemarksAndStatusSection)
-  title: 'Mr.' // Added the missing title property
+  status: '', // Required field in PrescriptionFormData interface
+  title: 'Mr.' // Required field separate from namePrefix
 };
 
 const OrderCardForm: React.FC = () => {
@@ -172,10 +174,10 @@ const OrderCardForm: React.FC = () => {
     const balance = paymentEstimate - schAmt - totalAdvance;
 
     // Update state for both balance and the calculated advance
-    setFormData(prev => ({
-      ...prev,
-      balance: balance.toFixed(2),
-      advance: totalAdvance.toFixed(2)
+    setFormData(prev => ({ 
+      ...prev, 
+      balance: balance.toFixed(2), 
+      advance: totalAdvance.toFixed(2) 
     }));
 
   }, [
@@ -198,7 +200,7 @@ const OrderCardForm: React.FC = () => {
         setFormData(prev => ({ ...prev, ipd: calculatedIPD }));
     } else {
          setFormData(prev => ({ ...prev, ipd: '' }));
-    }
+      }
   }, [formData.rightEye.dv.rpd, formData.leftEye.dv.lpd]);
 
   // Payment Section: Auto-calculate Payment Estimate and Sch Amt from selectedItems
@@ -220,60 +222,150 @@ const OrderCardForm: React.FC = () => {
   }, [formData.selectedItems, formData.advance]);
 
   // Auto-suggestion search function
-  const searchPrescriptions = async (query: string, field: string) => {
-    if (!query || query.length < 2) { // Add a minimum query length to avoid too many searches
+  const searchPrescriptions = (query: string, field: string) => {
+    if (!query.trim()) {
       setSuggestions([]);
       return;
     }
 
-    // Clear previous timeout to debounce
+    // Clear previous timeout if it exists
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        // Indicate loading state if you have one
-        // setIsLoading(true);
-        const params = new URLSearchParams();
-        // Map field name to API query parameter name
-        let paramName = '';
+        // Define the column to search based on the field
+        let column = '';
         switch (field) {
-          case 'prescriptionNo': paramName = 'prescriptionNo'; break;
-          case 'referenceNo': paramName = 'referenceNo'; break;
-          case 'name': paramName = 'name'; break;
-          case 'mobileNo': paramName = 'phone'; break;
+          case 'prescriptionNo': column = 'prescription_no'; break;
+          case 'referenceNo': column = 'reference_no'; break;
+          case 'name': column = 'name'; break;
+          case 'mobileNo': column = 'mobile_no'; break;
           default: return; // Don't search for other fields
         }
 
-        params.append(paramName, query);
-
-        const response = await fetch(`/api/prescriptions/search?${params.toString()}`);
-
-        if (!response.ok) {
-           // Check if the response is JSON before parsing
-           const contentType = response.headers.get('content-type');
-           if (contentType && contentType.includes('application/json')) {
-              const errorData = await response.json();
-              setNotification({
-                message: errorData.message || 'Search failed',
-                type: 'error',
-                visible: true
-              });
-           } else {
-              // Handle non-JSON error responses (like HTML)
-              setNotification({
-                message: `Search failed: Unexpected response from server (Status: ${response.status})`,
-                type: 'error',
-                visible: true
-              });
-           }
-           setSuggestions([]);
-           return;
+        console.log(`Searching for ${column} containing: ${query}`);
+        
+        // Use Supabase to query the database
+        let { data, error } = await supabase
+          .from('prescriptions')
+          .select('*')
+          .eq(column, query) // For exact match
+          .limit(5);
+          
+        // If no exact matches, try partial match for name/mobile
+        if ((!data || data.length === 0) && (column === 'name' || column === 'mobile_no')) {
+          const result = await supabase
+            .from('prescriptions')
+            .select('*')
+            .ilike(column, `%${query}%`) // For partial match
+            .limit(5);
+            
+          data = result.data;
+          error = result.error;
         }
-
-        const data = await response.json();
-        setSuggestions(data);
+          
+        if (error) {
+          console.error('Supabase search error:', error);
+          setNotification({
+            message: `Search failed: ${error.message}`,
+            type: 'error',
+            visible: true
+          });
+          setSuggestions([]);
+          return;
+        }
+        
+        if (!data || data.length === 0) {
+          console.log('No search results found');
+          setSuggestions([]);
+          return;
+        }
+          
+        console.log('Search results:', data);
+        
+        // Basic transformation of database results to match your interface
+        const transformedData: SearchSuggestion[] = data.map((item: any) => ({
+          id: item.id,
+          prescriptionNo: item.prescription_no || '',
+          referenceNo: item.reference_no || '',
+          name: item.name || '',
+          title: item.title || 'Mr.',
+          age: item.age ? String(item.age) : '',
+          gender: item.gender || 'Male',
+          customerCode: item.customer_code || '',
+          mobileNo: item.mobile_no || '',
+          // Basic prescription fields
+          status: item.status || '',
+          date: item.date || '',
+          class: item.class || '',
+          prescribedBy: item.prescribed_by || '',
+          birthDay: item.birth_day || '',
+          marriageAnniversary: item.marriage_anniversary || '',
+          address: item.address || '',
+          city: item.city || '',
+          state: item.state || '',
+          pinCode: item.pin_code || '',
+          phoneLandline: item.phone_landline || '',
+          email: item.email || '',
+          ipd: item.ipd || '',
+          bookingBy: '',
+          namePrefix: item.title || 'Mr.',
+          billed: false,
+          balanceLens: item.balance_lens || false,
+          // Default values for missing fields
+          rightEye: { 
+            dv: { sph: '', cyl: '', ax: '', add: '', vn: '6/', rpd: '' },
+            nv: { sph: '', cyl: '', ax: '', add: '', vn: 'N' } 
+          },
+          leftEye: { 
+            dv: { sph: '', cyl: '', ax: '', add: '', vn: '6/', lpd: '' },
+            nv: { sph: '', cyl: '', ax: '', add: '', vn: 'N' } 
+          },
+          remarks: {
+            forConstantUse: false,
+            forDistanceVisionOnly: false,
+            forNearVisionOnly: false,
+            separateGlasses: false,
+            biFocalLenses: false,
+            progressiveLenses: false,
+            antiReflectionLenses: false,
+            antiRadiationLenses: false,
+            underCorrected: false
+          },
+          selectedItems: [],
+          orderStatus: 'Processing',
+          orderStatusDate: '',
+          retestAfter: item.retest_after || '',
+          billNo: '',
+          // Payment related fields
+          paymentEstimate: '0.00',
+          schAmt: '0.00',
+          advance: '0.00',
+          balance: '0.00',
+          cashAdv1: '0.00',
+          ccUpiAdv: '0.00',
+          chequeAdv: '0.00',
+          cashAdv2: '0.00',
+          cashAdv2Date: '',
+          // Discount fields
+          applyDiscount: '',
+          discountType: 'percentage',
+          discountValue: '',
+          discountReason: '',
+          // Manual entry fields
+          manualEntryType: 'Frames',
+          manualEntryItemName: '',
+          manualEntryRate: '',
+          manualEntryQty: 1,
+          manualEntryItemAmount: 0,
+          others: '',
+          currentDateTime: '',
+          deliveryDateTime: ''
+        }));
+          
+        setSuggestions(transformedData);
       } catch (error) {
         console.error('Search error:', error);
         setNotification({
@@ -294,10 +386,10 @@ const OrderCardForm: React.FC = () => {
     const { name, value } = e.target;
 
     // Update the form data immediately
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
 
     // Set the active field and trigger search
     setActiveField(name);
@@ -480,7 +572,7 @@ const OrderCardForm: React.FC = () => {
   // Keep existing handleCheckboxChange
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.target;
-
+    
     if (name.includes('.')) {
       // Handle nested checkbox properties
       const parts = name.split('.');
@@ -1019,13 +1111,13 @@ const OrderCardForm: React.FC = () => {
 
         {/* Spectacles Section */}
          {/* Re-integrating the Spectacles Section structure */} 
-         <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
              <div className="flex flex-col space-y-2">
                  <Button type="button" variant="action" className="text-xs">&#60;&#60; Add Spectacle &#62;&#62;</Button>
-                 <Button
-                   type="button"
-                   variant="action"
-                   className="text-xs"
+                 <Button 
+                   type="button" 
+                   variant="action" 
+                   className="text-xs" 
                    onClick={() => handleAddManualEntry('Frames')}
                  >
                    &#60;&#60; Add Frame / Sun Glasses &#62;&#62;
@@ -1155,62 +1247,62 @@ const OrderCardForm: React.FC = () => {
                                       </td>
                                   </tr>
                               )))}
-                          </tbody>
-                      </table>
-                      {/* Apply Discount Section */} 
-                      <div className="flex justify-between items-center mt-3 p-2 bg-gray-50 rounded border">
-                        <div className="flex items-center space-x-4">
-                          <span className="text-xs font-medium">Discount Type:</span>
-                          <label className="inline-flex items-center">
-                            <input
-                              type="radio"
-                              name="discountType"
-                              value="percentage"
-                              checked={formData.discountType === 'percentage'}
+                      </tbody>
+                  </table>
+                  {/* Apply Discount Section */}
+                  <div className="flex justify-between items-center mt-3 p-2 bg-gray-50 rounded border">
+                    <div className="flex items-center space-x-4">
+                      <span className="text-xs font-medium">Discount Type:</span>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          name="discountType"
+                          value="percentage"
+                          checked={formData.discountType === 'percentage'}
                               onChange={handleChange} // Use main handleChange
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                            />
-                            <span className="ml-1 text-xs">%</span>
-                          </label>
-                          <label className="inline-flex items-center">
-                            <input
-                              type="radio"
-                              name="discountType"
-                              value="fixed"
-                              checked={formData.discountType === 'fixed'}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                        />
+                        <span className="ml-1 text-xs">%</span>
+                      </label>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          name="discountType"
+                          value="fixed"
+                          checked={formData.discountType === 'fixed'}
                               onChange={handleChange} // Use main handleChange
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                            />
-                            <span className="ml-1 text-xs">Fixed Amount</span>
-                          </label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <label className="text-xs font-medium">
-                            {formData.discountType === 'percentage' ? 'Discount %:' : 'Discount Amount:'}
-                          </label>
-                          <Input
-                            value={formData.applyDiscount}
-                            name="applyDiscount"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                        />
+                        <span className="ml-1 text-xs">Fixed Amount</span>
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <label className="text-xs font-medium">
+                        {formData.discountType === 'percentage' ? 'Discount %:' : 'Discount Amount:'}
+                      </label>
+                      <Input
+                        value={formData.applyDiscount}
+                        name="applyDiscount"
                             onChange={handleChange} // Use main handleChange
-                            className="w-16 text-right text-xs px-1 py-0.5"
-                            placeholder={formData.discountType === 'percentage' ? '0.00%' : '0.00'}
-                          />
-                          <Button
-                            type="button"
-                            variant="action"
-                            size="sm"
-                            className="text-xs"
-                            onClick={handleApplyDiscount}
-                          >
-                            Apply Disc
-                          </Button>
-                        </div>
-                      </div>
+                        className="w-16 text-right text-xs px-1 py-0.5"
+                        placeholder={formData.discountType === 'percentage' ? '0.00%' : '0.00'}
+                      />
+                      <Button
+                        type="button"
+                        variant="action"
+                        size="sm"
+                        className="text-xs"
+                        onClick={handleApplyDiscount}
+                      >
+                        Apply Disc
+                      </Button>
+                    </div>
+                  </div>
              </div>
          </div>
         {/* Remarks and Payment Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* Remarks and Status */} 
+            {/* Remarks and Status */}
             <RemarksAndStatusSection
                 formData={formData}
                 handleChange={handleChange}
@@ -1227,7 +1319,7 @@ const OrderCardForm: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-4 mt-8">
           <Button type="submit" variant="action">&#60;&#60; Add Order Card &#62;&#62;</Button>
           {/* These buttons might need logic to interact with search/edit/print features */} 
-          <Button type="button" variant="action">&#60;&#60; Edit/Search Order Card &#62;&#62;</Button> 
+          <Button type="button" variant="action">&#60;&#60; Edit/Search Order Card &#62;&#62;</Button>
           <Button type="button" variant="action">&#60;&#60; Print Order Card &#62;&#62;</Button>
           <Button type="button" variant="action" onClick={handleClear}>&#60;&#60; Clear Order &#62;&#62;</Button>
           <Button type="button" variant="action">&#60;&#60; Exit &#62;&#62;</Button>
@@ -1235,40 +1327,40 @@ const OrderCardForm: React.FC = () => {
 
       </Card>
 
-      {/* Render the Toast Notification */} 
+      {/* Render the Toast Notification */}
       {notification.visible && (
-        <ToastNotification
-          message={notification.message}
-          type={notification.type}
-          onClose={() => setNotification({ ...notification, visible: false })}
-        />
+      <ToastNotification
+        message={notification.message}
+        type={notification.type}
+        onClose={() => setNotification({ ...notification, visible: false })}
+      />
       )}
 
-      {/* Item Selection Popup */} 
+      {/* Item Selection Popup */}
       {showItemSelectionPopup && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
           <div className="relative p-6 border w-11/12 md:w-1/3 shadow-lg rounded-md bg-white">
             <h4 className="text-lg font-semibold mb-4 border-b pb-2 text-blue-700">Select Item Type</h4>
             <div className="space-y-4">
-              <Button
-                type="button"
-                variant="action"
+              <Button 
+                type="button" 
+                variant="action" 
                 className="w-full text-left justify-start"
                 onClick={() => handleAddItemClick('Frames')}
               >
                 Add Frames
               </Button>
-              <Button
-                type="button"
-                variant="action"
+              <Button 
+                type="button" 
+                variant="action" 
                 className="w-full text-left justify-start"
                 onClick={() => handleAddItemClick('Sun Glasses')}
               >
                 Add Sunglasses
               </Button>
-              <Button
-                type="button"
-                variant="outline"
+              <Button 
+                type="button" 
+                variant="outline" 
                 className="w-full mt-4"
                 onClick={() => setShowItemSelectionPopup(false)}
               >
@@ -1279,7 +1371,7 @@ const OrderCardForm: React.FC = () => {
         </div>
       )}
 
-      {/* Manual Entry Popup */} 
+      {/* Manual Entry Popup */}
       {showManualEntryPopup && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
           <div className="relative p-6 border w-11/12 md:w-2/3 lg:w-1/3 shadow-lg rounded-md bg-white">
@@ -1288,7 +1380,7 @@ const OrderCardForm: React.FC = () => {
             </h4>
             <div className="mb-4">
               {/* Assuming RadioGroup is needed, it was in the original CustomerInfoSection */} 
-               <RadioGroup
+              <RadioGroup
                 label="Type:"
                 name="manualEntryType"
                 options={[
@@ -1348,7 +1440,7 @@ const OrderCardForm: React.FC = () => {
         </div>
       )}
 
-      {/* Lens Entry Popup */} 
+      {/* Lens Entry Popup */}
       {showLensEntryPopup && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
           <div className="relative p-6 border w-11/12 md:w-2/3 lg:w-1/3 shadow-lg rounded-md bg-white">
