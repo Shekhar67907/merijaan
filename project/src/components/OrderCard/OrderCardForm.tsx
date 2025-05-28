@@ -211,7 +211,7 @@ const OrderCardForm: React.FC = () => {
   const [retestAfterChecked, setRetestAfterChecked] = useState(false);
   const [showItemSelectionPopup, setShowItemSelectionPopup] = useState(false);
   const [selectedItemType, setSelectedItemType] = useState<'Frames' | 'Sun Glasses'>('Frames');
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | ''; visible: boolean }>({ message: '', type: '', visible: false });
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({ message: '', type: 'success', visible: false });
 
   // Effect to calculate Item Amount in manual entry popup
   useEffect(() => {
@@ -313,28 +313,48 @@ const OrderCardForm: React.FC = () => {
   // Handle numeric input changes with validation
   const handleNumericInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const numericValue = value.replace(/[^0-9.-]/g, '');
     
-    if (name.includes('.')) {
-      // Handle nested numeric properties
-      const parts = name.split('.');
-      setFormData(prev => {
-        const newData = { ...prev };
-        let current: any = newData;
-        for (let i = 0; i < parts.length - 1; i++) {
-          current[parts[i]] = { ...current[parts[i]] };
-          current = current[parts[i]];
-        }
-        current[parts[parts.length - 1]] = numericValue;
-        return newData;
-      });
-    } else {
-      // Handle top-level numeric properties
-      setFormData(prev => ({
-        ...prev,
-        [name]: numericValue
-      }));
+    // Skip processing if name is undefined
+    if (!name) {
+      console.error('Input name is undefined in handleNumericInputChange');
+      return;
     }
+    
+    let processedValue = value;
+
+    // For RPD and LPD fields, allow direct input without formatting
+    if (name.includes('rpd') || name.includes('lpd')) {
+      processedValue = value;
+    } else if (name.includes('ax')) {
+      // For axial, ensure integer between 0-180
+      processedValue = value.replace(/[^0-9]/g, '');
+      const numValue = parseInt(processedValue, 10);
+      if (!isNaN(numValue)) {
+         if (numValue > 180) {
+           processedValue = '180';
+         } else if (numValue < 0) {
+            processedValue = '0';
+         }
+      } else {
+        processedValue = '';
+      }
+    } else {
+      // For other numeric fields, allow numbers, decimal point, and negative sign
+      processedValue = value.replace(/[^0-9.-]/g, '');
+    }
+    
+    // Create a synthetic event with the processed value
+    const syntheticEvent = {
+      ...e,
+      target: {
+        ...e.target,
+        name: name,
+        value: processedValue,
+      }
+    } as React.ChangeEvent<HTMLInputElement>;
+    
+    // Call the main handleChange with the synthetic event
+    handleChange(syntheticEvent);
   };
 
   // Handle checkbox changes
@@ -950,12 +970,13 @@ const OrderCardForm: React.FC = () => {
       </Card>
 
       {/* Render the Toast Notification */}
-      <ToastNotification
-        message={notification.message}
-        type={notification.type}
-        visible={notification.visible}
-        onClose={() => setNotification({ ...notification, visible: false })}
-      />
+      {notification.visible && (
+        <ToastNotification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification({ ...notification, visible: false })}
+        />
+      )}
 
       {/* Item Selection Popup */}
       {showItemSelectionPopup && (

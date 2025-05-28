@@ -11,7 +11,8 @@ import {
   calculateSphericalEquivalent,
   handleSpecialCases,
   validateVnValue,
-  formatVnValue
+  formatVnValue,
+  formatPrescriptionNumber
 } from '../../utils/prescriptionUtils';
 
 interface PrescriptionSectionProps {
@@ -395,6 +396,22 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
     formData.leftEye.nv.cyl
   ]);
 
+  // Validate prescription data when values change
+  useEffect(() => {
+    const rightEyeErrors = validatePrescriptionData(formData.rightEye.dv, false);
+    const leftEyeErrors = validatePrescriptionData(formData.leftEye.dv, formData.balanceLens);
+
+    const newErrors: Record<string, string> = {};
+    rightEyeErrors.forEach(error => {
+      newErrors[`rightEye.dv.${error.field}`] = error.message;
+    });
+    leftEyeErrors.forEach(error => {
+      newErrors[`leftEye.dv.${error.field}`] = error.message;
+    });
+
+    setErrors(newErrors);
+  }, [formData.rightEye.dv, formData.leftEye.dv, formData.balanceLens]);
+
   return (
     <div className="mb-6">
       <h3 className="text-lg font-semibold text-gray-800 mb-3 border-b pb-2 text-blue-700">Lens Prescription</h3>
@@ -459,10 +476,10 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
             <tbody>
               <tr>
                 <td className="border border-gray-300 p-1 text-sm font-medium text-left">D.V</td>
-                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.sph} name="rightEye.dv.sph" onChange={handleNumericInputChange} className="text-center text-sm" /></td>
-                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.cyl} name="rightEye.dv.cyl" onChange={handleNumericInputChange} className="text-center text-sm" /></td>
-                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.ax} name="rightEye.dv.ax" onChange={handleChange} className="text-center text-sm" /></td>
-                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.add} name="rightEye.dv.add" onChange={handleNumericInputChange} onBlur={(e) => calculateNearVision('rightEye', e)} className="text-center text-sm" /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.sph} name="rightEye.dv.sph" onChange={handleNumericInputChange} className="text-center text-sm" error={errors['rightEye.dv.sph']} /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.cyl} name="rightEye.dv.cyl" onChange={handleNumericInputChange} className="text-center text-sm" error={errors['rightEye.dv.cyl']} /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.ax} name="rightEye.dv.ax" onChange={handleChange} className="text-center text-sm" error={errors['rightEye.dv.ax']} /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.add} name="rightEye.dv.add" onChange={handleNumericInputChange} onBlur={(e) => calculateNearVision('rightEye', e)} className="text-center text-sm" error={errors['rightEye.dv.add']} /></td>
                 <td className="border border-gray-300 p-1 relative">
                   <Input 
                     value={formData.rightEye.dv.vn} 
@@ -471,6 +488,7 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                     onFocus={handleVnFocus} 
                     onKeyDown={handleVnKeyDown} 
                     className="text-center text-sm"
+                    error={errors['rightEye.dv.vn']}
                     placeholder="6/"
                   />
                   {vaStatus.rightEye?.comparisonToExpected && (
@@ -488,17 +506,7 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                     </div>
                   )}
                 </td>
-                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.rpd} name="rightEye.dv.rpd" onChange={handleNumericInputChange} onBlur={(e) => {
-                  const value = parseFloat(e.target.value);
-                  if (!isNaN(value)) {
-                    handleChange({
-                      target: {
-                        name: e.target.name,
-                        value: value.toFixed(1)
-                      }
-                    } as React.ChangeEvent<HTMLInputElement>);
-                  }
-                }} className="text-center text-sm" /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.rpd} name="rightEye.dv.rpd" onChange={handleNumericInputChange} className="text-center text-sm" error={errors['rightEye.dv.rpd']} /></td>
                 <td className="border border-gray-300 p-1 text-sm text-gray-600">{formData.rightEye.dv.sphericalEquivalent || '-'}</td>
               </tr>
               <tr>
@@ -556,10 +564,10 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
             <tbody>
               <tr>
                 <td className="border border-gray-300 p-1 text-sm font-medium text-left">D.V</td>
-                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.sph} name="leftEye.dv.sph" onChange={handleNumericInputChange} className="text-center text-sm" /></td>
-                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.cyl} name="leftEye.dv.cyl" onChange={handleNumericInputChange} className="text-center text-sm" /></td>
-                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.ax} name="leftEye.dv.ax" onChange={handleChange} className="text-center text-sm" /></td>
-                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.add} name="leftEye.dv.add" onChange={handleNumericInputChange} onBlur={(e) => calculateNearVision('leftEye', e)} className="text-center text-sm" /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.sph} name="leftEye.dv.sph" onChange={handleNumericInputChange} className="text-center text-sm" disabled={formData.balanceLens} error={errors['leftEye.dv.sph']} /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.cyl} name="leftEye.dv.cyl" onChange={handleNumericInputChange} className="text-center text-sm" disabled={formData.balanceLens} error={errors['leftEye.dv.cyl']} /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.ax} name="leftEye.dv.ax" onChange={handleChange} className="text-center text-sm" disabled={formData.balanceLens} error={errors['leftEye.dv.ax']} /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.add} name="leftEye.dv.add" onChange={handleNumericInputChange} onBlur={(e) => calculateNearVision('leftEye', e)} className="text-center text-sm" disabled={formData.balanceLens} error={errors['leftEye.dv.add']} /></td>
                 <td className="border border-gray-300 p-1 relative">
                   <Input 
                     value={formData.leftEye.dv.vn} 
@@ -568,6 +576,8 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                     onFocus={handleVnFocus}
                     onKeyDown={handleVnKeyDown}
                     className="text-center text-sm"
+                    disabled={formData.balanceLens}
+                    error={errors['leftEye.dv.vn']}
                     placeholder="6/"
                   />
                   {vaStatus.leftEye?.comparisonToExpected && (
@@ -585,17 +595,7 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
                     </div>
                   )}
                 </td>
-                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.lpd} name="leftEye.dv.lpd" onChange={handleNumericInputChange} onBlur={(e) => {
-                  const value = parseFloat(e.target.value);
-                  if (!isNaN(value)) {
-                    handleChange({
-                      target: {
-                        name: e.target.name,
-                        value: value.toFixed(1)
-                      }
-                    } as React.ChangeEvent<HTMLInputElement>);
-                  }
-                }} className="text-center text-sm" /></td>
+                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.lpd} name="leftEye.dv.lpd" onChange={handleNumericInputChange} className="text-center text-sm" error={errors['leftEye.dv.lpd']} /></td>
                 <td className="border border-gray-300 p-1 text-sm text-gray-600">{formData.leftEye.dv.sphericalEquivalent || '-'}</td>
               </tr>
               <tr>

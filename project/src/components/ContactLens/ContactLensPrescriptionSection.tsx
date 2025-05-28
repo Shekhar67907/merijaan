@@ -1,11 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Input from '../ui/Input';
 import Checkbox from '../ui/Checkbox';
 import { ContactLensFormData } from './ContactLensTypes';
 import { 
   calculateNearVisionSph,
   validateVnValue,
-  formatVnValue
+  formatVnValue,
+  validatePrescriptionData,
+  calculateSphericalEquivalent,
+  formatPrescriptionNumber
 } from '../../utils/prescriptionUtils';
 
 interface ContactLensPrescriptionSectionProps {
@@ -21,8 +24,7 @@ const ContactLensPrescriptionSection: React.FC<ContactLensPrescriptionSectionPro
   handleNumericInputChange,
   handleCheckboxChange,
 }) => {
-  // We'll implement warnings later if needed
-  // For now, focus on fixing the core functionality
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Calculate Near Vision values based on D.V values
   const calculateNearVision = (eye: 'rightEye' | 'leftEye', e: React.FocusEvent<HTMLInputElement>) => {

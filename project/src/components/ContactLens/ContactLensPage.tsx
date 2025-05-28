@@ -99,7 +99,7 @@ const ContactLensPage: React.FC = () => {
   const [formData, setFormData] = useState<ContactLensFormData>(initialContactLensForm);
   const [showManualForm, setShowManualForm] = useState(false);
   const [discountPercentage, setDiscountPercentage] = useState<string>('');
-  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | ''; visible: boolean }>({ message: '', type: '', visible: false });
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({ message: '', type: 'success', visible: false });
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     // Extract name and value, but don't destructure to avoid issues with undefined
@@ -158,7 +158,10 @@ const ContactLensPage: React.FC = () => {
     
     let processedValue = value;
 
-    if (name.includes('ax')) {
+    // For RPD and LPD fields, allow direct input without formatting
+    if (name.includes('rpd') || name.includes('lpd')) {
+      processedValue = value;
+    } else if (name.includes('ax')) {
       // For axial, ensure integer between 0-180
       processedValue = value.replace(/[^0-9]/g, '');
       const numValue = parseInt(processedValue, 10);
@@ -171,13 +174,9 @@ const ContactLensPage: React.FC = () => {
       } else {
         processedValue = ''; // Clear if not a valid number after cleaning
       }
-
     } else { // Existing logic for other numeric fields
       // Allow only numbers, decimal point, and negative sign
       processedValue = value.replace(/[^0-9.-]/g, '');
-      
-      // Optional: Add more specific formatting for sph, cyl, add if needed
-      // For now, keep the basic numeric cleaning for others
     }
     
     // Create a properly structured synthetic event with explicitly set name and formatted value
@@ -473,12 +472,13 @@ const ContactLensPage: React.FC = () => {
       </Card>
       
       {/* Render the Toast Notification */}
-      <ToastNotification 
-        message={notification.message}
-        type={notification.type}
-        visible={notification.visible}
-        onClose={() => setNotification({ ...notification, visible: false })}
-      />
+      {notification.visible && (
+        <ToastNotification 
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification({ ...notification, visible: false })}
+        />
+      )}
       
       {/* Manual Entry Form Popup */}
       {showManualForm && (

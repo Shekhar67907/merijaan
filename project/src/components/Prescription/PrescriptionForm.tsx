@@ -18,7 +18,8 @@ import {
   prescribedByOptions
 } from '../../utils/helpers';
 import {
-  validatePrescriptionData
+  validatePrescriptionData,
+  formatPrescriptionNumber
 } from '../../utils/prescriptionUtils';
 import LensPrescriptionSection from './LensPrescriptionSection';
 
@@ -76,13 +77,17 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
   // Handle initial reference number setting and IPD calculation
   useEffect(() => {
-    // Remove auto-setting reference number from prescription number
-    // Only calculate IPD from RPD and LPD
+    // Set reference number same as prescription number initially if empty
+    if (!formData.referenceNo) {
+      setFormData(prev => ({ ...prev, referenceNo: prev.prescriptionNo }));
+    }
+    
+    // Calculate IPD from RPD and LPD
     const calculatedIPD = calculateIPD(formData.rightEye.dv.rpd, formData.leftEye.dv.lpd);
     if (calculatedIPD) {
       setFormData(prev => ({ ...prev, ipd: calculatedIPD }));
     }
-  }, [formData.rightEye.dv.rpd, formData.leftEye.dv.lpd]);
+  }, [formData.prescriptionNo, formData.rightEye.dv.rpd, formData.leftEye.dv.lpd]);
   
   // Handle copying DV values to NV when DV values change
   useEffect(() => {
@@ -249,26 +254,21 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
     // Format the value based on field type
     let formattedValue = value;
-    // Apply common formatting for numeric fields
-    if (name.includes('sph') || name.includes('cyl') || name.includes('add')) {
-      // Remove non-numeric chars except decimal point and minus sign
-      formattedValue = value.replace(/[^0-9.-]/g, '');
-      // Ensure proper decimal format
-      if (formattedValue && !isNaN(parseFloat(formattedValue))) {
-        // Limit to 2 decimal places for most fields
-        const numValue = parseFloat(formattedValue);
-        formattedValue = numValue.toFixed(2);
-        // Remove trailing zeros
-        formattedValue = formattedValue.replace(/\.?0+$/, '');
-      }
+    
+    // Apply validation and formatting based on field type
+    if (name.includes('sph')) {
+      formattedValue = formatPrescriptionNumber(value, 'SPH');
+    } else if (name.includes('cyl')) {
+      formattedValue = formatPrescriptionNumber(value, 'CYL');
     } else if (name.includes('ax')) {
-      // For axis, ensure integer between 0-180
-      formattedValue = value.replace(/[^0-9]/g, '');
-      const numValue = parseInt(formattedValue);
-      if (!isNaN(numValue) && numValue > 180) {
-        formattedValue = '180';
-      }
+      formattedValue = formatPrescriptionNumber(value, 'AX');
+    } else if (name.includes('add')) {
+      formattedValue = formatPrescriptionNumber(value, 'ADD');
+    } else if (name.includes('rpd') || name.includes('lpd')) {
+      // For RPD and LPD, allow direct input without formatting
+      formattedValue = value;
     }
+
     // Call handleChange with a proper event object
     handleChange({
       target: {
@@ -348,7 +348,7 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
     
     setFormData({
       prescriptionNo: newPrescriptionNo,
-      referenceNo: '', // Don't auto-set reference number
+      referenceNo: newPrescriptionNo, // Set to same as prescription number
       class: '',
       prescribedBy: '',
       date: getTodayDate(),

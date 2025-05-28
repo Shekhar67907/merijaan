@@ -1,4 +1,13 @@
-import { PRESCRIPTION_RANGES, PrescriptionData, ValidationError, VisualAcuity, VA_THRESHOLDS, VA_CONVERSION, PRESCRIPTION_ALERTS } from '../components/types';
+import { PrescriptionData, ValidationError, VisualAcuity, VA_THRESHOLDS, VA_CONVERSION, PRESCRIPTION_ALERTS } from '../components/types';
+
+// Define prescription ranges
+export const PRESCRIPTION_RANGES = {
+  SPH: { min: -20.00, max: 20.00, step: 0.25 },
+  CYL: { min: -6.00, max: 6.00, step: 0.25 },
+  AX: { min: 0, max: 180, step: 1 },
+  ADD: { min: 0.75, max: 3.50, step: 0.25 },
+  PD: { min: 25, max: 38, step: 0.5 }
+};
 
 // Helper to check if a value is within a step size
 const isValidStep = (value: number, step: number): boolean => {
@@ -334,6 +343,7 @@ interface PrescriptionDVData {
   lpd?: string;
 }
 
+// Validate prescription data with proper ranges
 export const validatePrescriptionData = (
   dvData: PrescriptionDVData, 
   isBalanceLens: boolean = false
@@ -342,50 +352,53 @@ export const validatePrescriptionData = (
 
   // Skip validation for left eye when balance lens is checked
   if (isBalanceLens) {
-    return errors; // Return empty errors array since values are copied from right eye
+    return errors;
   }
 
-  // Normal validation rules when not a balance lens
-  if (dvData.sph && dvData.sph !== '') {
-    const sphValue = parseFloat(dvData.sph);
-    if (isNaN(sphValue) || sphValue < -20 || sphValue > 20) {
-      errors.push({
-        field: 'sph',
-        message: 'SPH must be between -20 and +20'
-      });
-    }
+  // Validate SPH
+  if (dvData.sph) {
+    const sphError = validateNumericField(dvData.sph, 'SPH', false);
+    if (sphError) errors.push(sphError);
   }
-  
-  if (dvData.cyl && dvData.cyl !== '') {
-    const cylValue = parseFloat(dvData.cyl);
-    if (isNaN(cylValue) || cylValue < -6 || cylValue > 0) {
-      errors.push({
-        field: 'cyl',
-        message: 'CYL must be between -6 and 0'
-      });
-    }
-    
-    if (!dvData.ax || dvData.ax === '') {
-      errors.push({
-        field: 'ax',
-        message: 'AX is required when CYL has a value'
-      });
-    }
+
+  // Validate CYL
+  if (dvData.cyl) {
+    const cylError = validateNumericField(dvData.cyl, 'CYL', false);
+    if (cylError) errors.push(cylError);
   }
-  
-  if (dvData.ax && dvData.ax !== '') {
-    const axValue = parseInt(dvData.ax);
-    if (isNaN(axValue) || axValue < 1 || axValue > 180) {
-      errors.push({
-        field: 'ax',
-        message: 'AX must be between 1 and 180'
-      });
-    }
+
+  // Validate AX
+  if (dvData.ax) {
+    const axError = validateNumericField(dvData.ax, 'AX', false);
+    if (axError) errors.push(axError);
+  }
+
+  // Validate ADD
+  if (dvData.add) {
+    const addError = validateNumericField(dvData.add, 'ADD', false);
+    if (addError) errors.push(addError);
+  }
+
+  // Validate RPD/LPD
+  if (dvData.rpd) {
+    const rpdError = validateNumericField(dvData.rpd, 'PD', false);
+    if (rpdError) errors.push(rpdError);
+  }
+  if (dvData.lpd) {
+    const lpdError = validateNumericField(dvData.lpd, 'PD', false);
+    if (lpdError) errors.push(lpdError);
+  }
+
+  // Validate that AX is present when CYL is present
+  if (dvData.cyl && !dvData.ax) {
+    errors.push({
+      field: 'ax',
+      message: 'AX is required when CYL has a value'
+    });
   }
 
   return errors;
 };
-
 
 // Format numeric input to maintain step sizes
 export const formatPrescriptionNumber = (value: string, field: keyof typeof PRESCRIPTION_RANGES): string => {
@@ -397,7 +410,10 @@ export const formatPrescriptionNumber = (value: string, field: keyof typeof PRES
   const range = PRESCRIPTION_RANGES[field];
   const steppedValue = Math.round(numValue / range.step) * range.step;
   
-  return steppedValue.toFixed(2);
+  // Ensure value is within range
+  const clampedValue = Math.min(Math.max(steppedValue, range.min), range.max);
+  
+  return clampedValue.toFixed(2);
 };
 
 // Enhanced special cases handling
