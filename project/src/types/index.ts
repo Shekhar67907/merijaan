@@ -1,4 +1,5 @@
 export interface PrescriptionData {
+  id?: string;
   prescriptionNo: string;
   referenceNo: string;
   class: string;

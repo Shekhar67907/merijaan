@@ -6,11 +6,13 @@ import PrescriptionPage from './components/Prescription/PrescriptionPage';
 import OrderCardForm from './components/OrderCard/OrderCardForm';
 import BillingPage from './components/Billing/BillingPage';
 import ContactLensPage from './components/ContactLens/ContactLensPage';
+import TestConnection from './components/TestConnection';
 
 function App() {
   return (
     <Router>
       <MainLayout>
+        <TestConnection />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/prescription" element={<PrescriptionPage />} />

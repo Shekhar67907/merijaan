@@ -324,62 +324,150 @@ export const validateAxisWhenCylPresent = (cyl: string, axis: string): Validatio
   return null;
 };
 
-// Enhanced validation for prescription data
-export const validatePrescriptionData = (data: PrescriptionData, isBalanceLens: boolean): ValidationError[] => {
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
+interface PrescriptionDVData {
+  sph: string;
+  cyl: string;
+  ax: string;
+  add: string;
+  vn: string;
+  rpd?: string;
+  lpd?: string;
+}
+
+export const validatePrescriptionData = (
+  dvData: PrescriptionDVData, 
+  isBalanceLens: boolean = false
+): ValidationError[] => {
   const errors: ValidationError[] = [];
 
+  // If it's a balance lens, apply specific validation rules
   if (isBalanceLens) {
-    if (data.sph !== '0' && data.sph !== '') 
-      errors.push({ field: 'sph', message: 'Must be 0 for balance lens' });
-    if (data.cyl !== '0' && data.cyl !== '') 
-      errors.push({ field: 'cyl', message: 'Must be 0 for balance lens' });
-    if (data.ax !== '' && data.ax !== '-') 
-      errors.push({ field: 'ax', message: 'Must be empty for balance lens' });
-    return errors;
-  }
-
-  // SPH validation
-  const sphError = validateNumericField(data.sph, 'SPH');
-  if (sphError) errors.push(sphError);
-
-  // CYL validation
-  const cylError = validateNumericField(data.cyl, 'CYL', false);
-  if (cylError) errors.push(cylError);
-
-  // Enhanced AXIS validation
-  const axisError = validateAxisWhenCylPresent(data.cyl, data.ax);
-  if (axisError) errors.push(axisError);
-
-  // ADD validation with stricter range
-  if (data.add) {
-    const addError = validateNumericField(data.add, 'ADD');
-    if (addError) errors.push(addError);
-    
-    // Additional validation for minimum ADD power
-    const addValue = parseFloat(data.add);
-    if (!isNaN(addValue) && addValue < PRESCRIPTION_RANGES.ADD.min) {
-      errors.push({ 
-        field: 'add', 
-        message: `ADD power must be at least ${PRESCRIPTION_RANGES.ADD.min}D for presbyopia correction` 
+    // For balance lens, left eye DV should have sph='0', cyl='0', ax=''
+    if (dvData.sph !== '0') {
+      errors.push({
+        field: 'sph',
+        message: 'Must be 0 for balance lens'
       });
     }
+    
+    if (dvData.cyl !== '0') {
+      errors.push({
+        field: 'cyl',
+        message: 'Must be 0 for balance lens'
+      });
+    }
+    
+    if (dvData.ax !== '') {
+      errors.push({
+        field: 'ax',
+        message: 'Must be empty for balance lens'
+      });
+    }
+    
+    // For balance lens, we might not need to validate other fields as strictly
+    // But we can still validate ADD and VN if they have values
+    if (dvData.add && dvData.add !== '') {
+      const addValue = parseFloat(dvData.add);
+      if (isNaN(addValue) || addValue < 0 || addValue > 4) {
+        errors.push({
+          field: 'add',
+          message: 'ADD must be between 0 and 4'
+        });
+      }
+    }
+  } else {
+    // Normal validation rules when not a balance lens
+    
+    // SPH validation
+    if (dvData.sph && dvData.sph !== '') {
+      const sphValue = parseFloat(dvData.sph);
+      if (isNaN(sphValue) || sphValue < -20 || sphValue > 20) {
+        errors.push({
+          field: 'sph',
+          message: 'SPH must be between -20 and +20'
+        });
+      }
+    }
+    
+    // CYL validation
+    if (dvData.cyl && dvData.cyl !== '') {
+      const cylValue = parseFloat(dvData.cyl);
+      if (isNaN(cylValue) || cylValue < -6 || cylValue > 0) {
+        errors.push({
+          field: 'cyl',
+          message: 'CYL must be between -6 and 0'
+        });
+      }
+      
+      // If CYL has a value, AX is required
+      if (!dvData.ax || dvData.ax === '') {
+        errors.push({
+          field: 'ax',
+          message: 'AX is required when CYL has a value'
+        });
+      }
+    }
+    
+    // AX validation
+    if (dvData.ax && dvData.ax !== '') {
+      const axValue = parseInt(dvData.ax);
+      if (isNaN(axValue) || axValue < 1 || axValue > 180) {
+        errors.push({
+          field: 'ax',
+          message: 'AX must be between 1 and 180'
+        });
+      }
+    }
+    
+    // ADD validation
+    if (dvData.add && dvData.add !== '') {
+      const addValue = parseFloat(dvData.add);
+      if (isNaN(addValue) || addValue < 0 || addValue > 4) {
+        errors.push({
+          field: 'add',
+          message: 'ADD must be between 0 and 4'
+        });
+      }
+    }
+    
+    // VN validation (if it follows a specific format like 6/6, 6/9, etc.)
+    if (dvData.vn && dvData.vn !== '') {
+      const vnPattern = /^6\/\d+$/;
+      if (!vnPattern.test(dvData.vn)) {
+        errors.push({
+          field: 'vn',
+          message: 'VN must be in format 6/X (e.g., 6/6, 6/9)'
+        });
+      }
+    }
+    
+    // RPD/LPD validation
+    if (dvData.rpd && dvData.rpd !== '') {
+      const rpdValue = parseFloat(dvData.rpd);
+      if (isNaN(rpdValue) || rpdValue < 25 || rpdValue > 40) {
+        errors.push({
+          field: 'rpd',
+          message: 'RPD must be between 25 and 40'
+        });
+      }
+    }
+    
+    if (dvData.lpd && dvData.lpd !== '') {
+      const lpdValue = parseFloat(dvData.lpd);
+      if (isNaN(lpdValue) || lpdValue < 25 || lpdValue > 40) {
+        errors.push({
+          field: 'lpd',
+          message: 'LPD must be between 25 and 40'
+        });
+      }
+    }
   }
-
-  // VN validation
-  if (data.vn && !validateAndFormatVn(data.vn)) {
-    errors.push({ field: 'vn', message: 'Invalid visual acuity format (e.g., 6/6)' });
-  }
-
-  // PD validation
-  if (data.rpd) {
-    const rpdError = validateNumericField(data.rpd, 'PD');
-    if (rpdError) errors.push(rpdError);
-  }
-  if (data.lpd) {
-    const lpdError = validateNumericField(data.lpd, 'PD');
-    if (lpdError) errors.push(lpdError);
-  }
-
+  
   return errors;
 };
 

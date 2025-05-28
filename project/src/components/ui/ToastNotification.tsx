@@ -2,33 +2,32 @@ import React, { useEffect } from 'react';
 
 interface ToastNotificationProps {
   message: string;
-  type: 'success' | 'error' | '';
-  visible: boolean;
+  type: 'success' | 'error';
   onClose: () => void;
 }
 
-const ToastNotification: React.FC<ToastNotificationProps> = ({
-  message,
-  type,
-  visible,
-  onClose
-}) => {
+const ToastNotification: React.FC<ToastNotificationProps> = ({ message, type, onClose }) => {
   useEffect(() => {
-    if (visible) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, 3000); // Auto-dismiss after 3 seconds
-      return () => clearTimeout(timer);
-    }
-  }, [visible, onClose]);
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000); // Auto close after 3 seconds
 
-  if (!visible) return null;
+    return () => clearTimeout(timer);
+  }, [onClose]);
 
-  const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-gray-500';
+  const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
 
   return (
-    <div className={`fixed bottom-4 right-4 p-4 text-white rounded shadow-lg ${bgColor} z-50`}>
-      {message}
+    <div className="fixed bottom-4 right-4 z-50">
+      <div className={`${bgColor} text-white px-6 py-3 rounded shadow-lg flex items-center`}>
+        <span>{message}</span>
+        <button
+          onClick={onClose}
+          className="ml-4 text-white hover:text-gray-200 focus:outline-none"
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 };

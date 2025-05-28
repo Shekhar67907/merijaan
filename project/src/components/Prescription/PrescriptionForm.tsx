@@ -114,33 +114,14 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
       }));
     }
   }, [formData.leftEye.dv, formData.leftEye.nv.sph]);
-  
-  // Handle balance lens functionality with a separate effect and ref to prevent infinite loops
-  const previousBalanceLensValue = React.useRef(formData.balanceLens);
-  
-  useEffect(() => {
-    // Only update if balanceLens has actually changed
-    if (formData.balanceLens !== previousBalanceLensValue.current) {
-      previousBalanceLensValue.current = formData.balanceLens;
-      
-      // Only apply balance lens if it's toggled on
-      if (formData.balanceLens) {
-        setFormData(prev => ({
-          ...prev,
-          leftEye: {
-            dv: {
-              ...prev.rightEye.dv,
-              lpd: prev.leftEye.dv.lpd // Keep original LPD
-            },
-            nv: { ...prev.rightEye.nv }
-          }
-        }));
-      }
-    }
-  }, [formData.balanceLens, formData.rightEye.dv, formData.rightEye.nv, formData.leftEye.dv.lpd]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+    
+    console.log('validateForm called with state:', { 
+      balanceLens: formData.balanceLens, 
+      leftEyeDv: formData.leftEye.dv 
+    });
     
     if (!formData.prescribedBy) {
       newErrors.prescribedBy = 'Prescribed By is required';
@@ -149,13 +130,27 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
     if (!formData.name) {
       newErrors.name = 'Name is required';
     }
-    // Validate left eye prescription
+
+    // Validate right eye prescription
+    const rightEyeErrors = validatePrescriptionData(formData.rightEye.dv, false);
+    rightEyeErrors.forEach(error => {
+      newErrors[`rightEye.dv.${error.field}`] = error.message;
+    });
+
+    // Validate left eye prescription, considering balance lens
     const leftEyeErrors = validatePrescriptionData(formData.leftEye.dv, formData.balanceLens);
+    console.log('Left eye validation:', { 
+      isBalanceLens: formData.balanceLens, 
+      leftEyeDv: formData.leftEye.dv, 
+      errors: leftEyeErrors 
+    });
+    
     leftEyeErrors.forEach(error => {
       newErrors[`leftEye.dv.${error.field}`] = error.message;
     });
     
     setErrors(newErrors);
+    console.log('PrescriptionForm: validateForm result', Object.keys(newErrors).length === 0, { newErrors });
     return Object.keys(newErrors).length === 0;
   };
 
@@ -166,6 +161,16 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
       console.trace();
       return;
     }
+
+    // Prevent changes to left eye DV fields when balance lens is active
+    if (formData.balanceLens && name.startsWith('leftEye.dv.')) {
+      const field = name.split('.').pop();
+      if (field === 'sph' || field === 'cyl' || field === 'ax') {
+        console.log('Preventing change to left eye field when balance lens is active:', name);
+        return;
+      }
+    }
+
     // Handle nested properties
     if (name.includes('.')) {
       const [parent, child, grandchild] = name.split('.');
@@ -192,24 +197,77 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.target;
+    console.log('handleCheckboxChange called with:', { name, checked, currentBalanceLens: formData.balanceLens });
     
-    if (name.includes('.')) {
-      const [parent, child] = name.split('.');
-      
-      setFormData(prev => ({
-        ...prev,
-        [parent]: {
-          ...(prev[parent as keyof PrescriptionData] as object),
-          [child]: checked,
-        }
-      }));
+    if (name === 'balanceLens') {
+      // Handle balance lens state update
+      setFormData(prev => {
+        const newState = {
+          ...prev,
+          balanceLens: checked,
+          leftEye: {
+            ...prev.leftEye,
+            dv: checked ? {
+              // When balance lens is checked, set these specific values
+              sph: '0',
+              cyl: '0',
+              ax: '',
+              // Keep other values from right eye or existing left eye
+              add: prev.rightEye.dv.add,
+              vn: prev.rightEye.dv.vn,
+              lpd: prev.leftEye.dv.lpd
+            } : prev.leftEye.dv // When unchecked, keep existing values
+          }
+        };
+        console.log('New state after balance lens change:', { 
+          balanceLens: newState.balanceLens, 
+          leftEyeDv: newState.leftEye.dv 
+        });
+        return newState;
+      });
+
+      // Clear any existing errors for the left eye fields
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors['leftEye.dv.sph'];
+        delete newErrors['leftEye.dv.cyl'];
+        delete newErrors['leftEye.dv.ax'];
+        console.log('Cleared errors for left eye fields');
+        return newErrors;
+      });
     } else {
-      setFormData(prev => ({ ...prev, [name]: checked }));
+      // Handle other checkbox changes
+      setFormData(prev => {
+        let newState = { ...prev };
+        if (name.includes('.')) {
+          const [parent, child] = name.split('.');
+          newState = {
+            ...prev,
+            [parent]: {
+              ...(prev[parent as keyof PrescriptionData] as object),
+              [child]: checked,
+            }
+          };
+        } else {
+          newState = { ...prev, [name]: checked };
+        }
+        return newState;
+      });
     }
   };
 
   const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+
+    // Prevent changes to left eye DV fields when balance lens is active
+    if (formData.balanceLens && name.startsWith('leftEye.dv.')) {
+      const field = name.split('.').pop();
+      if (field === 'sph' || field === 'cyl' || field === 'ax') {
+        console.log('Preventing numeric change to left eye field when balance lens is active:', name);
+        return;
+      }
+    }
+
     // Format the value based on field type
     let formattedValue = value;
     // Apply common formatting for numeric fields
@@ -257,8 +315,12 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('PrescriptionForm: handleFormSubmit triggered');
     
+    console.log('PrescriptionForm: State before validation:', { formData });
+
     if (validateForm()) {
+      console.log('PrescriptionForm: Form validation successful, calling onSubmit');
       onSubmit(formData);
       
       // Reset form or show success message
