@@ -46,12 +46,12 @@ const BillingPage: React.FC = () => {
   const [isCash, setIsCash] = useState(false);
   
   // Payment details
-  const [estimate, setEstimate] = useState('0');
-  const [schDisc, setSchDisc] = useState('0');
-  const [payment, setPayment] = useState('0');
-  const [tax, setTax] = useState('0');
-  const [advance, setAdvance] = useState('0');
-  const [balance, setBalance] = useState('0');
+  const [estimate, setEstimate] = useState('');
+  const [schDisc, setSchDisc] = useState('');
+  const [payment, setPayment] = useState('');
+  const [tax, setTax] = useState('');
+  const [advance, setAdvance] = useState('');
+  const [balance, setBalance] = useState('');
   const [cash, setCash] = useState('0');
   const [ccUpiAdv, setCcUpiAdv] = useState('0');
   const [ccUpiType, setCcUpiType] = useState('');
@@ -163,12 +163,12 @@ const BillingPage: React.FC = () => {
     setEmail('');
     setCcode('');
     setIsCash(false);
-    setEstimate('0');
-    setSchDisc('0');
-    setPayment('0');
-    setTax('0');
-    setAdvance('0');
-    setBalance('0');
+    setEstimate('');
+    setSchDisc('');
+    setPayment('');
+    setTax('');
+    setAdvance('');
+    setBalance('');
     setCash('0');
     setCcUpiAdv('0');
     setCcUpiType('');
@@ -610,6 +610,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 bg-[#e8e7fa] rounded-none text-right" 
                   value={estimate}
                   onChange={(e) => setEstimate(e.target.value)}
+                  placeholder="0"
                 />
               </div>
               <div className="w-1/6 px-1">
@@ -619,6 +620,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 bg-[#e8e7fa] rounded-none text-right" 
                   value={schDisc}
                   onChange={(e) => setSchDisc(e.target.value)}
+                  placeholder="0"
                 />
                 <span className="text-xs text-gray-500">(Rs.)</span>
               </div>
@@ -629,6 +631,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 rounded-none text-right" 
                   value={payment}
                   onChange={(e) => setPayment(e.target.value)}
+                  placeholder="0"
                 />
               </div>
               <div className="w-1/6 px-1">
@@ -638,6 +641,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 rounded-none text-right" 
                   value={tax}
                   onChange={(e) => setTax(e.target.value)}
+                  placeholder="0"
                 />
               </div>
               <div className="w-1/6 px-1">
@@ -647,6 +651,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 bg-[#e8e7fa] rounded-none text-right" 
                   value={advance}
                   onChange={(e) => setAdvance(e.target.value)}
+                  placeholder="0"
                 />
               </div>
               <div className="w-1/6 pl-1">
@@ -656,6 +661,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 bg-[#e8e7fa] rounded-none text-right" 
                   value={balance}
                   onChange={(e) => setBalance(e.target.value)}
+                  placeholder="0"
                 />
               </div>
             </div>
@@ -668,6 +674,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 rounded-none text-right" 
                   value={cash}
                   onChange={(e) => setCash(e.target.value)}
+                  placeholder="0"
                 />
               </div>
               <div className="w-1/3 px-2">
@@ -687,6 +694,7 @@ const BillingPage: React.FC = () => {
                     className="w-1/2 px-2 py-1 border border-gray-300 border-l-0 rounded-none text-right" 
                     value={ccUpiAdv}
                     onChange={(e) => setCcUpiAdv(e.target.value)}
+                    placeholder="0"
                   />
                 </div>
               </div>
@@ -697,6 +705,7 @@ const BillingPage: React.FC = () => {
                   className="w-full px-2 py-1 border border-gray-300 rounded-none text-right" 
                   value={cheque}
                   onChange={(e) => setCheque(e.target.value)}
+                  placeholder="0"
                 />
               </div>
             </div>
