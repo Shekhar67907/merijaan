@@ -129,6 +129,7 @@ export interface PrescriptionFormData {
   };
   retestAfter: string;
   others: string;
+  status: string;
   bookingBy: string;
   namePrefix: string;
   billed: boolean;

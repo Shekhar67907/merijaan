@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '../ui/Card';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
@@ -11,109 +11,40 @@ import CustomerInfoSection from './CustomerInfoSection';
 import PrescriptionSection from './PrescriptionSection';
 import RemarksAndStatusSection from './RemarksAndStatusSection';
 import PaymentSection from './PaymentSection';
-import { PrescriptionFormData } from '../types';
+import { PrescriptionFormData, PrescriptionData, SelectedItem } from '../types';
 import ToastNotification from '../ui/ToastNotification';
 
-// Define interfaces for form data and table rows
-interface PrescriptionEyeData {
-  sph: string;
-  cyl: string;
-  ax: string;
-  add: string;
-  vn: string;
-  rpd?: string; // RPD only for Right eye
-  lpd?: string; // LPD only for Left eye
+// Interface for the structure of a search suggestion (based on API response which is a full Prescription object)
+interface SearchSuggestion extends PrescriptionFormData {
+  id: string; // Assuming an ID field exists in your DB schema and API response
+  status: string; // Make status required to match PrescriptionFormData
 }
 
-interface PrescriptionData {
-  dv: PrescriptionEyeData;
-  nv: PrescriptionEyeData;
-}
+// Helper function to format date for datetime-local input
+const formatDateForInput = (date: string | null | undefined): string => {
+  if (!date) return '';
+  // Ensure date is a string before trying to include('T')
+  if (typeof date !== 'string') return '';
+  // If the date is already in datetime-local format, return as is
+  if (date.includes('T')) return date;
+  // Otherwise, append the time component (assuming midnight if no time is available)
+  return `${date}T00:00`;
+};
 
-interface SelectedItem {
-  si: number;
-  itemCode: string;
-  itemName: string;
-  unit: string;
-  taxPercent: number;
-  rate: number;
-  amount: number;
-  qty: number;
-  discountAmount: number;
-  discountPercent: number;
-  // Lens-specific fields
-  brandName?: string;
-  index?: string;
-  coating?: string;
-}
-
-interface OrderCardFormData {
-  orderNo: string;
-  referenceNo: string;
-  currentDateTime: string;
-  deliveryDateTime: string;
-  class: string;
-  bookingBy: string;
-  namePrefix: string;
-  name: string;
-  gender: string;
-  age: string;
-  address: string;
-  city: string;
-  state: string;
-  pinCode: string;
-  phoneLandline: string;
-  mobileNo: string;
-  email: string;
-  customerCode: string;
-  birthDay: string;
-  marriageAnniversary: string;
-  ipd: string;
-  prescribedBy: string;
-  billed: boolean;
-  rightEye: PrescriptionData;
-  leftEye: PrescriptionData;
-  balanceLens: boolean;
-  selectedItems: SelectedItem[];
-  remarks: string;
-  status: string;
-  orderStatus: string;
-  orderStatusDate: string;
-  retestAfter: string;
-  billNo: string;
-  paymentEstimate: string;
-  schAmt: string;
-  advance: string;
-  balance: string;
-  cashAdv1: string;
-  ccUpiAdv: string;
-  chequeAdv: string;
-  cashAdv2: string;
-  cashAdv2Date: string;
-  applyDiscount: string;
-  discountType: 'percentage' | 'fixed';
-  discountValue: string;
-  discountReason: string;
-  manualEntryType: 'Frames' | 'Sun Glasses';
-  manualEntryItemName: string;
-  manualEntryRate: string;
-  manualEntryQty: number;
-  manualEntryItemAmount: number;
-}
-
-// Initial form state with proper nested structure
+// Initial form state with proper nested structure and default datetime-local format
+// Define this before the component where it's used
 const initialFormState: PrescriptionFormData = {
   prescriptionNo: '',
   referenceNo: '',
-  currentDateTime: getTodayDate(),
-  deliveryDateTime: getNextMonthDate(),
-  date: getTodayDate(),
+  currentDateTime: formatDateForInput(getTodayDate()),
+  deliveryDateTime: formatDateForInput(getNextMonthDate()),
+  date: getTodayDate(), // Assuming date is just date in PrescriptionFormData
   class: '',
-  prescribedBy: '',
+  bookingBy: '',
+  namePrefix: 'Mr.',
   name: '',
-  title: '',
-  age: '',
   gender: 'Male',
+  age: '',
   customerCode: '',
   birthDay: '',
   marriageAnniversary: '',
@@ -124,44 +55,20 @@ const initialFormState: PrescriptionFormData = {
   phoneLandline: '',
   mobileNo: '',
   email: '',
-  ipd: '0.0',
+  ipd: '',
+  prescribedBy: '',
+  billed: false,
   rightEye: {
-    dv: {
-      sph: '',
-      cyl: '',
-      ax: '',
-      add: '',
-      vn: '6/',
-      rpd: ''
-    },
-    nv: {
-      sph: '',
-      cyl: '',
-      ax: '',
-      add: '',
-      vn: '',
-      rpd: ''
-    }
+    dv: { sph: '', cyl: '', ax: '', add: '', vn: '6/', rpd: '' },
+    nv: { sph: '', cyl: '', ax: '', add: '', vn: 'N' }
   },
   leftEye: {
-    dv: {
-      sph: '',
-      cyl: '',
-      ax: '',
-      add: '',
-      vn: '6/',
-      lpd: ''
-    },
-    nv: {
-      sph: '',
-      cyl: '',
-      ax: '',
-      add: '',
-      vn: '',
-      lpd: ''
-    }
+    dv: { sph: '', cyl: '', ax: '', add: '', vn: '6/', lpd: '' },
+    nv: { sph: '', cyl: '', ax: '', add: '', vn: 'N' }
   },
-  remarks: {
+  balanceLens: false,
+  selectedItems: [],
+  remarks: { // Initialize remarks as an object with boolean flags based on PrescriptionForm.tsx
     forConstantUse: false,
     forDistanceVisionOnly: false,
     forNearVisionOnly: false,
@@ -172,46 +79,42 @@ const initialFormState: PrescriptionFormData = {
     antiRadiationLenses: false,
     underCorrected: false
   },
-  retestAfter: '',
-  others: '',
-  balanceLens: false,
-  bookingBy: '',
-  namePrefix: 'Mr.',
-  billed: false,
-  selectedItems: [],
   orderStatus: 'Processing',
-  orderStatusDate: getTodayDate(),
+  orderStatusDate: formatDateForInput(getTodayDate()),
+  retestAfter: '',
   billNo: '',
   paymentEstimate: '0.00',
   schAmt: '0.00',
   advance: '0.00',
   balance: '0.00',
+  // Added missing payment fields based on linter error and likely PaymentSection requirements
   cashAdv1: '0.00',
   ccUpiAdv: '0.00',
   chequeAdv: '0.00',
   cashAdv2: '0.00',
-  cashAdv2Date: getTodayDate(),
-  discountType: 'percentage',
+  cashAdv2Date: formatDateForInput(getTodayDate()),
+
+  // Keep discount fields, although their usage needs confirmation
   applyDiscount: '',
-  discountValue: '',
+  discountType: 'percentage',
+  discountValue: '', // Value for the discount (either % or fixed amount)
   discountReason: '',
+
+  // Manual entry fields
   manualEntryType: 'Frames',
   manualEntryItemName: '',
   manualEntryRate: '',
   manualEntryQty: 1,
-  manualEntryItemAmount: 0
-};
+  manualEntryItemAmount: 0,
 
-// Add this helper function at the top of the file, after imports
-const formatDateForInput = (date: string): string => {
-  if (!date) return '';
-  // If the date is already in datetime-local format, return as is
-  if (date.includes('T')) return date;
-  // Otherwise, append the time component
-  return `${date}T00:00`;
+  // Assuming these are also part of PrescriptionFormData based on your initial state
+  others: '',
+  status: '', // Assuming a status field exists based on linter error (might be for RemarksAndStatusSection)
+  title: 'Mr.' // Added the missing title property
 };
 
 const OrderCardForm: React.FC = () => {
+  // Use the imported PrescriptionFormData type for state
   const [formData, setFormData] = useState<PrescriptionFormData>(initialFormState);
 
   const [showManualEntryPopup, setShowManualEntryPopup] = useState(false);
@@ -220,8 +123,31 @@ const OrderCardForm: React.FC = () => {
   const [retestAfterChecked, setRetestAfterChecked] = useState(false);
   const [showItemSelectionPopup, setShowItemSelectionPopup] = useState(false);
   const [selectedItemType, setSelectedItemType] = useState<'Frames' | 'Sun Glasses'>('Frames');
+  // Ensure notification type aligns with ToastNotification props
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({ message: '', type: 'success', visible: false });
-  const [searchQuery, setSearchQuery] = useState({ prescriptionNo: '', referenceNo: '', name: '', phone: '' });
+
+  // States for search suggestions
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [activeField, setActiveField] = useState<string | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  // Handle click outside suggestions to close them
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Check if the clicked element is within the suggestions dropdown or the input field
+      const clickedInsideSuggestions = suggestionsRef.current && suggestionsRef.current.contains(event.target as Node);
+      const clickedOnInput = activeField && (event.target as Element).closest(`input[name='${activeField}']`);
+
+      if (!clickedInsideSuggestions && !clickedOnInput) {
+        setActiveField(null);
+        setSuggestions([]);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeField]); // Add activeField to dependency array
 
   // Effect to calculate Item Amount in manual entry popup
   useEffect(() => {
@@ -246,10 +172,10 @@ const OrderCardForm: React.FC = () => {
     const balance = paymentEstimate - schAmt - totalAdvance;
 
     // Update state for both balance and the calculated advance
-    setFormData(prev => ({ 
-      ...prev, 
-      balance: balance.toFixed(2), 
-      advance: totalAdvance.toFixed(2) 
+    setFormData(prev => ({
+      ...prev,
+      balance: balance.toFixed(2),
+      advance: totalAdvance.toFixed(2)
     }));
 
   }, [
@@ -261,19 +187,18 @@ const OrderCardForm: React.FC = () => {
     formData.cashAdv2
   ]);
 
-  // Effect to handle prescription logic
+  // Effect to handle prescription logic (IPD calculation)
   useEffect(() => {
     // Calculate IPD from RPD and LPD
-    if (formData.rightEye.dv.rpd && formData.leftEye.dv.lpd) {
-      const rpdValue = parseFloat(formData.rightEye.dv.rpd);
-      const lpdValue = parseFloat(formData.leftEye.dv.lpd);
-      if (!isNaN(rpdValue) && !isNaN(lpdValue)) {
+    const rpdValue = parseFloat(formData.rightEye.dv.rpd || '0');
+    const lpdValue = parseFloat(formData.leftEye.dv.lpd || '0');
+
+    if (!isNaN(rpdValue) && !isNaN(lpdValue) && (rpdValue > 0 || lpdValue > 0)) {
         const calculatedIPD = (rpdValue + lpdValue).toFixed(1);
-        console.log('[IPD Effect] Setting ipd to', calculatedIPD);
         setFormData(prev => ({ ...prev, ipd: calculatedIPD }));
-      }
+    } else {
+         setFormData(prev => ({ ...prev, ipd: '' }));
     }
-    // Do not touch any other part of the state!
   }, [formData.rightEye.dv.rpd, formData.leftEye.dv.lpd]);
 
   // Payment Section: Auto-calculate Payment Estimate and Sch Amt from selectedItems
@@ -294,13 +219,231 @@ const OrderCardForm: React.FC = () => {
     }));
   }, [formData.selectedItems, formData.advance]);
 
-  // Handle input changes
+  // Auto-suggestion search function
+  const searchPrescriptions = async (query: string, field: string) => {
+    if (!query || query.length < 2) { // Add a minimum query length to avoid too many searches
+      setSuggestions([]);
+      return;
+    }
+
+    // Clear previous timeout to debounce
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        // Indicate loading state if you have one
+        // setIsLoading(true);
+        const params = new URLSearchParams();
+        // Map field name to API query parameter name
+        let paramName = '';
+        switch (field) {
+          case 'prescriptionNo': paramName = 'prescriptionNo'; break;
+          case 'referenceNo': paramName = 'referenceNo'; break;
+          case 'name': paramName = 'name'; break;
+          case 'mobileNo': paramName = 'phone'; break;
+          default: return; // Don't search for other fields
+        }
+
+        params.append(paramName, query);
+
+        const response = await fetch(`/api/prescriptions/search?${params.toString()}`);
+
+        if (!response.ok) {
+           // Check if the response is JSON before parsing
+           const contentType = response.headers.get('content-type');
+           if (contentType && contentType.includes('application/json')) {
+              const errorData = await response.json();
+              setNotification({
+                message: errorData.message || 'Search failed',
+                type: 'error',
+                visible: true
+              });
+           } else {
+              // Handle non-JSON error responses (like HTML)
+              setNotification({
+                message: `Search failed: Unexpected response from server (Status: ${response.status})`,
+                type: 'error',
+                visible: true
+              });
+           }
+           setSuggestions([]);
+           return;
+        }
+
+        const data = await response.json();
+        setSuggestions(data);
+      } catch (error) {
+        console.error('Search error:', error);
+        setNotification({
+          message: error instanceof Error ? `Search error: ${error.message}` : 'An unknown error occurred during search',
+          type: 'error',
+          visible: true
+        });
+        setSuggestions([]);
+      } finally {
+         // Reset loading state
+        // setIsLoading(false);
+      }
+    }, 300); // Debounce delay
+  };
+
+  // Handle input change for search fields
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    // Update the form data immediately
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+
+    // Set the active field and trigger search
+    setActiveField(name);
+    searchPrescriptions(value, name);
+  };
+
+  // Handle suggestion selection
+  const handleSuggestionSelect = (suggestion: SearchSuggestion) => {
+    // Populate form data with the selected suggestion's data
+    setFormData(prevData => ({
+      ...prevData,
+      // Personal Info
+      name: suggestion.name || '',
+      // Ensure age is treated as string for the input value
+      age: suggestion.age?.toString() || '',
+      gender: suggestion.gender || 'Male',
+      customerCode: suggestion.customerCode || '',
+      // Format dates for datetime-local input if necessary
+      birthDay: formatDateForInput(suggestion.birthDay), // Assuming birthDay is a date string
+      marriageAnniversary: formatDateForInput(suggestion.marriageAnniversary), // Assuming marriageAnniversary is a date string
+      address: suggestion.address || '',
+      city: suggestion.city || '',
+      state: suggestion.state || '',
+      pinCode: suggestion.pinCode || '',
+      phoneLandline: suggestion.phoneLandline || '',
+      mobileNo: suggestion.mobileNo || '',
+      email: suggestion.email || '',
+      ipd: suggestion.ipd || '',
+      prescribedBy: suggestion.prescribedBy || '', // Assuming prescribedBy is on the Prescription object
+
+      // Order Info
+      prescriptionNo: suggestion.prescriptionNo || '',
+      referenceNo: suggestion.referenceNo || '',
+      // Note: currentDateTime and deliveryDateTime are not part of the search result typically,
+      // so we keep the existing values or generate new ones as per initial state logic.
+      // If you intend to load these from search, update the SearchSuggestion interface and this mapping.
+      currentDateTime: prevData.currentDateTime, // Keep existing
+      deliveryDateTime: prevData.deliveryDateTime, // Keep existing
+      class: suggestion.class || '', // Assuming class is on the Prescription object
+      bookingBy: suggestion.bookingBy || '', // Assuming bookingBy is on the Prescription object
+      billed: suggestion.billed || false, // Assuming billed is on the Prescription object
+
+      // Prescription Data (Ensure nested structure is handled)
+      rightEye: {
+        ...prevData.rightEye, // Preserve other rightEye properties if any
+        dv: {
+          ...prevData.rightEye.dv, // Preserve other rightEye DV properties if any
+          sph: suggestion.rightEye?.dv?.sph || '',
+          cyl: suggestion.rightEye?.dv?.cyl || '',
+          ax: suggestion.rightEye?.dv?.ax || '',
+          add: suggestion.rightEye?.dv?.add || '',
+          vn: suggestion.rightEye?.dv?.vn || '6/', // Default if empty
+          rpd: suggestion.rightEye?.dv?.rpd || ''
+        },
+        nv: {
+          ...prevData.rightEye.nv, // Preserve other rightEye NV properties if any
+          sph: suggestion.rightEye?.nv?.sph || '',
+          cyl: suggestion.rightEye?.nv?.cyl || '',
+          ax: suggestion.rightEye?.nv?.ax || '',
+          add: suggestion.rightEye?.nv?.add || '',
+          vn: suggestion.rightEye?.nv?.vn || 'N' // Default if empty
+        }
+      },
+      leftEye: {
+        ...prevData.leftEye, // Preserve other leftEye properties if any
+        dv: {
+          ...prevData.leftEye.dv, // Preserve other leftEye DV properties if any
+          sph: suggestion.leftEye?.dv?.sph || '',
+          cyl: suggestion.leftEye?.dv?.cyl || '',
+          ax: suggestion.leftEye?.dv?.ax || '',
+          add: suggestion.leftEye?.dv?.add || '',
+          vn: suggestion.leftEye?.dv?.vn || '6/', // Default if empty
+          lpd: suggestion.leftEye?.dv?.lpd || ''
+        },
+        nv: {
+          ...prevData.leftEye.nv, // Preserve other leftEye NV properties if any
+          sph: suggestion.leftEye?.nv?.sph || '',
+          cyl: suggestion.leftEye?.nv?.cyl || '',
+          ax: suggestion.leftEye?.nv?.ax || '',
+          add: suggestion.leftEye?.nv?.add || '',
+          vn: suggestion.leftEye?.nv?.vn || 'N' // Default if empty
+        }
+      },
+      balanceLens: suggestion.balanceLens || false, // Assuming balanceLens is on the Prescription object
+      remarks: suggestion.remarks || { // Initialize remarks as an object if null/undefined from search
+        forConstantUse: false,
+        forDistanceVisionOnly: false,
+        forNearVisionOnly: false,
+        separateGlasses: false,
+        biFocalLenses: false,
+        progressiveLenses: false,
+        antiReflectionLenses: false,
+        antiRadiationLenses: false,
+        underCorrected: false
+      },
+      orderStatus: suggestion.orderStatus || 'Processing', // Assuming orderStatus is on the Prescription object
+      orderStatusDate: formatDateForInput(suggestion.orderStatusDate), // Assuming orderStatusDate is on the Prescription object
+      retestAfter: formatDateForInput(suggestion.retestAfter), // Assuming retestAfter is on the Prescription object
+      billNo: suggestion.billNo || '', // Assuming billNo is on the Prescription object
+      // Keep other fields as they are not typically loaded from a basic prescription search
+      selectedItems: prevData.selectedItems,
+      paymentEstimate: prevData.paymentEstimate,
+      schAmt: prevData.schAmt,
+      advance: prevData.advance,
+      balance: prevData.balance,
+      cashAdv1: prevData.cashAdv1,
+      ccUpiAdv: prevData.ccUpiAdv,
+      chequeAdv: prevData.chequeAdv,
+      cashAdv2: prevData.cashAdv2,
+      cashAdv2Date: prevData.cashAdv2Date,
+      applyDiscount: prevData.applyDiscount,
+      discountType: prevData.discountType,
+      discountValue: prevData.discountValue,
+      discountReason: prevData.discountReason,
+      manualEntryType: prevData.manualEntryType,
+      manualEntryItemName: prevData.manualEntryItemName,
+      manualEntryRate: prevData.manualEntryRate,
+      manualEntryQty: prevData.manualEntryQty,
+      manualEntryItemAmount: prevData.manualEntryItemAmount,
+      others: suggestion.others || '', // Assuming others is on the Prescription object
+      status: suggestion.status || '', // Assuming status is on the Prescription object
+
+    }));
+    setActiveField(null);
+    setSuggestions([]);
+     setNotification({
+       message: 'Prescription data loaded from search',
+       type: 'success',
+       visible: true
+     });
+  };
+
+  // Keep existing handleChange for non-search fields and nested updates
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
-    // Format date values when they change
-    if (name === 'currentDateTime' || name === 'deliveryDateTime' || 
-        name === 'orderStatusDate' || name === 'retestAfter' || 
+
+    // If the changed field is one of the search fields, use the dedicated handler
+    if (['prescriptionNo', 'referenceNo', 'name', 'mobileNo'].includes(name)) {
+        // Ensure value is a string before passing to handleSearchInputChange
+        handleSearchInputChange(e as React.ChangeEvent<HTMLInputElement>);
+        return;
+    }
+
+    // Handle date inputs to ensure datetime-local format
+    if (name === 'currentDateTime' || name === 'deliveryDateTime' ||
+        name === 'orderStatusDate' || name === 'retestAfter' ||
         name === 'cashAdv2Date') {
       setFormData(prev => ({
         ...prev,
@@ -309,18 +452,21 @@ const OrderCardForm: React.FC = () => {
       return;
     }
 
+    // Handle nested properties (e.g., "rightEye.dv.sph")
     if (name.includes('.')) {
-      // Handle nested properties (e.g., "rightEye.dv.sph")
       const parts = name.split('.');
       setFormData(prev => {
-        const newData = { ...prev };
-        let current: any = newData;
+        const newData: any = { ...prev }; // Use any temporarily for nested updates
+        let current = newData;
         for (let i = 0; i < parts.length - 1; i++) {
+          if (!current[parts[i]]) {
+             current[parts[i]] = {}; // Initialize if undefined
+          }
           current[parts[i]] = { ...current[parts[i]] };
           current = current[parts[i]];
         }
         current[parts[parts.length - 1]] = value;
-        return newData;
+        return newData as PrescriptionFormData; // Cast back to the correct type
       });
     } else {
       // Handle top-level properties
@@ -331,16 +477,45 @@ const OrderCardForm: React.FC = () => {
     }
   };
 
-  // Handle numeric input changes with validation
+  // Keep existing handleCheckboxChange
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+
+    if (name.includes('.')) {
+      // Handle nested checkbox properties
+      const parts = name.split('.');
+      setFormData(prev => {
+        const newData: any = { ...prev }; // Use any temporarily
+        let current = newData;
+        for (let i = 0; i < parts.length - 1; i++) {
+           if (!current[parts[i]]) {
+             current[parts[i]] = {}; // Initialize if undefined
+          }
+          current[parts[i]] = { ...current[parts[i]] };
+          current = current[parts[i]];
+        }
+        current[parts[parts.length - 1]] = checked;
+        return newData as PrescriptionFormData; // Cast back
+      });
+    } else {
+      // Handle top-level checkbox properties
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked
+      }));
+    }
+  };
+
+  // Keep existing handleNumericInputChange
   const handleNumericInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    
+
     // Skip processing if name is undefined
     if (!name) {
       console.error('Input name is undefined in handleNumericInputChange');
       return;
     }
-    
+
     let processedValue = value;
 
     // For RPD and LPD fields, allow direct input without formatting
@@ -363,7 +538,7 @@ const OrderCardForm: React.FC = () => {
       // For other numeric fields, allow numbers, decimal point, and negative sign
       processedValue = value.replace(/[^0-9.-]/g, '');
     }
-    
+
     // Create a synthetic event with the processed value
     const syntheticEvent = {
       ...e,
@@ -373,37 +548,12 @@ const OrderCardForm: React.FC = () => {
         value: processedValue,
       }
     } as React.ChangeEvent<HTMLInputElement>;
-    
-    // Call the main handleChange with the synthetic event
+
+    // Call the main handleChange with the synthetic event (this will now route back to handleSearchInputChange for search fields if applicable)
     handleChange(syntheticEvent);
   };
 
-  // Handle checkbox changes
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    
-    if (name.includes('.')) {
-      // Handle nested checkbox properties
-      const parts = name.split('.');
-      setFormData(prev => {
-        const newData = { ...prev };
-        let current: any = newData;
-        for (let i = 0; i < parts.length - 1; i++) {
-          current[parts[i]] = { ...current[parts[i]] };
-          current = current[parts[i]];
-        }
-        current[parts[parts.length - 1]] = checked;
-        return newData;
-      });
-    } else {
-      // Handle top-level checkbox properties
-      setFormData(prev => ({
-        ...prev,
-        [name]: checked
-      }));
-    }
-  };
-
+   // Helper functions for manual entry (Keep these)
   const handleManualEntryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
 
@@ -435,13 +585,17 @@ const OrderCardForm: React.FC = () => {
 
   const handleAddManualEntryItem = () => {
     if (!formData.manualEntryItemName || !formData.manualEntryRate) {
-      alert('Please enter both item name and rate');
+      setNotification({
+        message: 'Please enter both item name and rate',
+        type: 'error',
+        visible: true,
+      });
       return;
     }
 
     const newItem: SelectedItem = {
       si: formData.selectedItems.length + 1,
-      itemCode: generateItemCode(formData.manualEntryType),
+      itemCode: generateItemCode(formData.manualEntryType), // Assuming generateItemCode exists
       itemName: formData.manualEntryItemName,
       unit: 'PCS',
       taxPercent: 0,
@@ -461,6 +615,11 @@ const OrderCardForm: React.FC = () => {
       manualEntryItemAmount: 0
     }));
     setShowManualEntryPopup(false);
+     setNotification({
+       message: 'Manual item added',
+       type: 'success',
+       visible: true
+     });
   };
 
   const handleDeleteItem = (index: number) => {
@@ -468,24 +627,42 @@ const OrderCardForm: React.FC = () => {
       ...prev,
       selectedItems: prev.selectedItems.filter((_, i) => i !== index)
     }));
+     setNotification({
+       message: 'Item deleted',
+       type: 'success',
+       visible: true
+     });
   };
 
   const handleOrderCardSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Order Card Data Submitted:', formData);
-    alert('Order Card submitted! Check console for data.');
+     setNotification({
+       message: 'Order Card submitted! Check console for data.',
+       type: 'success',
+       visible: true
+     });
+    // TODO: Implement actual save logic
   };
 
   const handleClear = () => {
     setFormData(initialFormState);
     setRetestAfterChecked(false);
+     setNotification({
+       message: 'Form cleared',
+       type: 'success',
+       visible: true
+     });
   };
 
   const handleApplyDiscount = () => {
     const discountValue = parseFloat(formData.applyDiscount || '0');
     if (discountValue <= 0) {
-      // Replace alert with error notification
-      setNotification({ message: 'Please enter a valid discount value (greater than 0)', type: 'error', visible: true });
+      setNotification({
+        message: 'Please enter a valid discount value (greater than 0)',
+        type: 'error',
+        visible: true
+      });
       return;
     }
     const totalBeforeDiscount = formData.selectedItems.reduce(
@@ -493,8 +670,11 @@ const OrderCardForm: React.FC = () => {
       0
     );
     if (totalBeforeDiscount <= 0) {
-      // Replace alert with error notification
-      setNotification({ message: 'No items to apply discount to', type: 'error', visible: true });
+      setNotification({
+        message: 'No items to apply discount to',
+        type: 'error',
+        visible: true
+      });
       return;
     }
     const discountType = formData.discountType || 'percentage';
@@ -503,24 +683,28 @@ const OrderCardForm: React.FC = () => {
       : Math.min(discountValue, totalBeforeDiscount);
     const updatedItems = formData.selectedItems.map(item => {
       const itemTotal = item.rate * item.qty;
-      const ratio = itemTotal / totalBeforeDiscount;
+      // Avoid division by zero if itemTotal is 0
+      const ratio = itemTotal === 0 ? 0 : itemTotal / totalBeforeDiscount;
       const itemDiscount = discountAmount * ratio;
       const discountedTotal = itemTotal - itemDiscount;
       return {
         ...item,
         amount: parseFloat(discountedTotal.toFixed(2)),
         discountAmount: parseFloat(itemDiscount.toFixed(2)),
-        discountPercent: parseFloat(((itemDiscount / itemTotal) * 100).toFixed(2)),
+        discountPercent: itemTotal === 0 ? 0 : parseFloat(((itemDiscount / itemTotal) * 100).toFixed(2)), // Avoid division by zero
       };
     });
     setFormData(prev => ({
       ...prev,
       selectedItems: updatedItems,
-      applyDiscount: '',
-      paymentEstimate: (totalBeforeDiscount - discountAmount).toFixed(2)
+      applyDiscount: '', // Clear discount input after applying
+      // paymentEstimate is recalculated by useEffect based on selectedItems
     }));
-    // Replace alert with success notification
-    setNotification({ message: `Successfully applied ${discountType === 'percentage' ? `${discountValue}%` : `$${discountValue.toFixed(2)}`} discount`, type: 'success', visible: true });
+    setNotification({
+      message: `Discount applied successfully!`, // More generic message as it's applied item-wise
+      type: 'success',
+      visible: true
+    });
   };
 
   const handleItemDiscountChange = (index: number, type: 'percentage' | 'fixed', value: string) => {
@@ -531,13 +715,15 @@ const OrderCardForm: React.FC = () => {
       const item = { ...updatedItems[index] };
       const itemTotal = item.rate * item.qty;
 
+      if (itemTotal === 0) return prev; // Prevent changes if item amount is 0
+
       if (type === 'percentage') {
         const percentage = Math.min(100, Math.max(0, numericValue));
         const discountAmount = (itemTotal * percentage) / 100;
         item.discountPercent = percentage;
         item.discountAmount = parseFloat(discountAmount.toFixed(2));
         item.amount = parseFloat((itemTotal - discountAmount).toFixed(2));
-      } else {
+      } else { // type === 'fixed'
         const discountAmount = Math.min(itemTotal, Math.max(0, numericValue));
         const discountPercentage = (discountAmount / itemTotal) * 100;
         item.discountAmount = parseFloat(discountAmount.toFixed(2));
@@ -545,105 +731,40 @@ const OrderCardForm: React.FC = () => {
         item.amount = parseFloat((itemTotal - discountAmount).toFixed(2));
       }
       updatedItems[index] = item;
+
+      // Manually trigger payment estimate update since selectedItems is the dependency
+      const total = updatedItems.reduce((sum, i) => sum + i.amount, 0);
+      const schAmt = updatedItems.reduce((sum, i) => sum + (i.discountAmount || 0), 0);
+      const advance = prev.advance === '' ? 0 : parseFloat(prev.advance);
+      const balance = total - (schAmt + advance); // Use total after item discounts
+
       return {
         ...prev,
-        selectedItems: updatedItems
+        selectedItems: updatedItems,
+        paymentEstimate: total.toFixed(2), // Update payment estimate based on discounted item amounts
+        schAmt: schAmt.toFixed(2), // Update scheme amount based on item discounts
+        balance: balance.toFixed(2) // Recalculate balance
       };
     });
   };
 
-  const updatePaymentEstimate = (items: SelectedItem[]) => {
-    const total = items.reduce((sum, item) => sum + item.amount, 0);
-    setFormData(prev => ({
-      ...prev,
-      paymentEstimate: total.toFixed(2)
-    }));
-  };
 
-  const handleSearch = async (field: string, value: string) => {
-    console.log(`[handleSearch] Searching by ${field} with value: ${value}`);
-    if (!value.trim()) {
-      setNotification({
-        message: 'Please enter a search value',
-        type: 'error',
-        visible: true
-      });
-      return;
-    }
+  // Helper functions (Keep these)
+  function generateOrderNo(): string {
+    // TODO: Implement proper order number generation logic
+    return `ORD${Date.now().toString().slice(-6)}`;
+  }
 
-    try {
-      const response = await fetch(`/api/prescriptions/search?${field}=${encodeURIComponent(value)}`);
-      const data = await response.json();
+  function generateBillNo(): string {
+    // TODO: Implement proper bill number generation logic
+    return `BILL${Date.now().toString().slice(-6)}`;
+  }
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to search prescription');
-      }
-
-      // Update form data with the found prescription
-      setFormData(prevData => ({
-        ...prevData,
-        prescriptionNo: data.prescriptionNo || '',
-        referenceNo: data.referenceNo || '',
-        name: data.name || '',
-        age: data.age || '',
-        gender: data.gender || '',
-        mobileNo: data.mobileNo || '',
-        phoneLandline: data.phoneLandline || '',
-        address: data.address || '',
-        rightEye: {
-          ...prevData.rightEye,
-          dv: {
-            ...prevData.rightEye.dv,
-            sph: data.rightEye?.dv?.sph || '',
-            cyl: data.rightEye?.dv?.cyl || '',
-            ax: data.rightEye?.dv?.ax || '',
-            rpd: data.rightEye?.dv?.rpd || '',
-            lpd: data.rightEye?.dv?.lpd || '',
-            add: data.rightEye?.dv?.add || ''
-          },
-          nv: {
-            ...prevData.rightEye.nv,
-            sph: data.rightEye?.nv?.sph || '',
-            cyl: data.rightEye?.nv?.cyl || '',
-            ax: data.rightEye?.nv?.ax || '',
-            add: data.rightEye?.nv?.add || ''
-          }
-        },
-        leftEye: {
-          ...prevData.leftEye,
-          dv: {
-            ...prevData.leftEye.dv,
-            sph: data.leftEye?.dv?.sph || '',
-            cyl: data.leftEye?.dv?.cyl || '',
-            ax: data.leftEye?.dv?.ax || '',
-            rpd: data.leftEye?.dv?.rpd || '',
-            lpd: data.leftEye?.dv?.lpd || '',
-            add: data.leftEye?.dv?.add || ''
-          },
-          nv: {
-            ...prevData.leftEye.nv,
-            sph: data.leftEye?.nv?.sph || '',
-            cyl: data.leftEye?.nv?.cyl || '',
-            ax: data.leftEye?.nv?.ax || '',
-            add: data.leftEye?.nv?.add || ''
-          }
-        }
-      }));
-
-      setNotification({
-        message: 'Prescription found and form updated',
-        type: 'success',
-        visible: true
-      });
-    } catch (error) {
-      console.error('Search error:', error);
-      setNotification({
-        message: error instanceof Error ? error.message : 'Failed to search prescription',
-        type: 'error',
-        visible: true
-      });
-    }
-  };
+  function generateItemCode(type: string): string {
+    // TODO: Implement proper item code generation logic
+    const prefix = type === 'Frames' ? 'FRM' : (type === 'Sun Glasses' ? 'SUN' : 'LEN');
+    return `${prefix}${Date.now().toString().slice(-4)}`;
+  }
 
   return (
     <form onSubmit={handleOrderCardSubmit} className="w-full max-w-screen-xl mx-auto p-4 bg-gray-100 font-sans text-sm">
@@ -651,6 +772,7 @@ const OrderCardForm: React.FC = () => {
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-center mb-4 border-b pb-3 bg-blue-100 rounded-t-md px-4 py-2">
           <div className="flex space-x-1 mb-2 sm:mb-0">
+            {/* Navigation Buttons - Keep these for now */} 
             <Button type="button" variant="outline" size="sm" className="text-xs">&#60;&#60; First</Button>
             <Button type="button" variant="outline" size="sm" className="text-xs">&#60; Prev</Button>
             <Button type="button" variant="outline" size="sm" className="text-xs">Next &#62;</Button>
@@ -663,56 +785,247 @@ const OrderCardForm: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           {/* Order Info */}
           <div className="grid grid-cols-1 gap-3 text-gray-700 border p-4 rounded bg-blue-50 shadow-sm">
-            <Input label="Prescription No.:" value={formData.prescriptionNo} name="prescriptionNo" onChange={handleChange} readOnly />
-            <Input label="Reference No.:" value={formData.referenceNo} name="referenceNo" onChange={handleChange} />
-            <Input
-              type="datetime-local"
-              label="Current Date/Time"
-              name="currentDateTime"
-              value={formData.currentDateTime}
-              onChange={handleChange}
-            />
-            <Input
-              type="datetime-local"
-              label="Delivery Date/Time"
-              name="deliveryDateTime"
-              value={formData.deliveryDateTime}
-              onChange={handleChange}
-            />
+            {/* Prescription No. with Autocomplete */}
+            <div className="relative">
+              <Input
+                label="Prescription No.:"
+                name="prescriptionNo"
+                value={formData.prescriptionNo}
+                onChange={handleChange} // Use the main handleChange
+                onFocus={() => setActiveField('prescriptionNo')}
+                autoComplete="off" // Prevent browser autocomplete
+              />
+              {activeField === 'prescriptionNo' && suggestions.length > 0 && (
+                <div
+                  ref={suggestionsRef}
+                  className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto"
+                >
+                  <ul className="divide-y divide-gray-200">
+                    {suggestions.map((suggestion) => (
+                      <li
+                        key={suggestion.id} // Use unique ID from API
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => handleSuggestionSelect(suggestion)}
+                      >
+                        {suggestion.prescriptionNo} - {suggestion.name} ({suggestion.mobileNo || suggestion.phoneLandline})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Reference No. with Autocomplete */}
+            <div className="relative">
+              <Input
+                label="Reference No.:"
+                name="referenceNo"
+                value={formData.referenceNo}
+                onChange={handleChange} // Use the main handleChange
+                onFocus={() => setActiveField('referenceNo')}
+                 autoComplete="off"
+              />
+               {activeField === 'referenceNo' && suggestions.length > 0 && (
+                <div
+                  ref={suggestionsRef}
+                  className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto"
+                >
+                  <ul className="divide-y divide-gray-200">
+                    {suggestions.map((suggestion) => (
+                      <li
+                        key={suggestion.id}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => handleSuggestionSelect(suggestion)}
+                      >
+                         {suggestion.referenceNo} - {suggestion.name} ({suggestion.mobileNo || suggestion.phoneLandline})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <Input label="Current Date/Time:" value={formData.currentDateTime} name="currentDateTime" onChange={handleChange} type="datetime-local" readOnly />
+            <Input label="Delivery Date/Time:" value={formData.deliveryDateTime} name="deliveryDateTime" onChange={handleChange} type="datetime-local"/>
             <Select label="Class:" options={classOptions} value={formData.class} name="class" onChange={handleChange} />
-            <Input label="Booking By:" value={formData.bookingBy} name="bookingBy" onChange={handleChange} />
+            <Input label="Booking By" value={formData.bookingBy} name="bookingBy" onChange={handleChange} />
           </div>
 
           {/* Customer Info */}
-          <CustomerInfoSection
-            formData={formData}
-            handleChange={handleChange}
-            handleCheckboxChange={handleCheckboxChange}
-            handleNumericInputChange={handleNumericInputChange}
-          />
+          <div className="grid grid-cols-1 gap-3 text-gray-700 border p-4 rounded bg-blue-50 shadow-sm">
+            {/* Name with Autocomplete */}
+            <div className="relative">
+              <Input
+                label="Name"
+                value={formData.name}
+                onChange={handleChange} // Use the main handleChange
+                name="name"
+                required
+                onFocus={() => setActiveField('name')}
+                 autoComplete="off"
+              />
+               {activeField === 'name' && suggestions.length > 0 && (
+                <div
+                  ref={suggestionsRef}
+                  className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto"
+                >
+                  <ul className="divide-y divide-gray-200">
+                    {suggestions.map((suggestion) => (
+                      <li
+                        key={suggestion.id}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => handleSuggestionSelect(suggestion)}
+                      >
+                         {suggestion.name} - {suggestion.mobileNo || suggestion.phoneLandline} ({suggestion.prescriptionNo || suggestion.referenceNo})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+             <Select
+                label="Title"
+                options={titleOptions}
+                value={formData.title}
+                onChange={handleChange}
+                name="title"
+                className="w-24"
+                fullWidth={false}
+              />
+               {/* Reverted Gender to RadioGroup as per original code */} 
+              <RadioGroup
+                label="Gender"
+                name="gender"
+                options={[
+                  { label: 'Male', value: 'Male' },
+                  { label: 'Female', value: 'Female' }
+                ]}
+                value={formData.gender}
+                onChange={handleChange}
+              />
+            <Input
+              label="Age"
+              type="number"
+              value={formData.age}
+              onChange={handleChange}
+              name="age"
+            />
+             <Input
+                label="Customer Code:"
+                value={formData.customerCode}
+                onChange={handleChange}
+                name="customerCode"
+              />
+              <Input
+                label="Birth Day:"
+                type="date"
+                value={formData.birthDay}
+                onChange={handleChange}
+                name="birthDay"
+              />
+              <Input
+                label="Marr Anniv:"
+                type="date"
+                value={formData.marriageAnniversary}
+                onChange={handleChange}
+                name="marriageAnniversary"
+              />
+               <Input
+                label="Address"
+                value={formData.address}
+                onChange={handleChange}
+                name="address"
+              />
+              <Input
+                label="City"
+                value={formData.city}
+                onChange={handleChange}
+                name="city"
+              />
+              <Input
+                label="State"
+                value={formData.state}
+                onChange={handleChange}
+                name="state"
+              />
+              <Input
+                label="Pin"
+                value={formData.pinCode}
+                onChange={handleChange}
+                name="pinCode"
+              />
+            {/* Phone No. with Autocomplete */}
+            <div className="relative">
+              <Input
+                label="Mobile No.:"
+                value={formData.mobileNo}
+                onChange={handleChange} // Use the main handleChange
+                name="mobileNo"
+                required
+                onFocus={() => setActiveField('mobileNo')}
+                 autoComplete="off"
+              />
+               {activeField === 'mobileNo' && suggestions.length > 0 && (
+                <div
+                  ref={suggestionsRef}
+                  className="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto"
+                >
+                  <ul className="divide-y divide-gray-200">
+                    {suggestions.map((suggestion) => (
+                      <li
+                        key={suggestion.id}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                        onClick={() => handleSuggestionSelect(suggestion)}
+                      >
+                         {suggestion.mobileNo || suggestion.phoneLandline} - {suggestion.name} ({suggestion.prescriptionNo || suggestion.referenceNo})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+             <Input
+                label="Phone (L.L.)"
+                value={formData.phoneLandline}
+                onChange={handleChange}
+                name="phoneLandline"
+              />
+              <Input
+                label="Email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                name="email"
+              />
+            </div>
+             <Input label="IPD:" value={formData.ipd} name="ipd" onChange={handleNumericInputChange} className="text-center" readOnly /> 
+            <Input label="Prescribed By" value={formData.prescribedBy} name="prescribedBy" onChange={handleChange} />
+            <Checkbox label="Billed" checked={formData.billed} onChange={handleCheckboxChange} name="billed" />
         </div>
 
         {/* Prescription Section */}
+        {/* Re-using your existing PrescriptionSection component */} 
         <PrescriptionSection
           formData={{
             rightEye: formData.rightEye,
             leftEye: formData.leftEye,
             balanceLens: formData.balanceLens,
-            age: parseInt(formData.age) || 0
+            age: parseInt(formData.age) || 0 // Ensure age is a number
           }}
           handleChange={handleChange}
           handleNumericInputChange={handleNumericInputChange}
           handleCheckboxChange={handleCheckboxChange}
         />
 
-        {/* Spectacles Section (Restored Layout)*/}
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Spectacles Section */}
+         {/* Re-integrating the Spectacles Section structure */} 
+         <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
              <div className="flex flex-col space-y-2">
                  <Button type="button" variant="action" className="text-xs">&#60;&#60; Add Spectacle &#62;&#62;</Button>
-                 <Button 
-                   type="button" 
-                   variant="action" 
-                   className="text-xs" 
+                 <Button
+                   type="button"
+                   variant="action"
+                   className="text-xs"
                    onClick={() => handleAddManualEntry('Frames')}
                  >
                    &#60;&#60; Add Frame / Sun Glasses &#62;&#62;
@@ -774,7 +1087,13 @@ const OrderCardForm: React.FC = () => {
                                             setFormData(prev => {
                                               const updatedItems = [...prev.selectedItems];
                                               updatedItems[index].rate = value;
-                                              updatedItems[index].amount = value * updatedItems[index].qty - updatedItems[index].discountAmount;
+                                              // Recalculate amount based on updated rate and existing discount/qty
+                                              const itemTotal = value * updatedItems[index].qty;
+                                              const discountAmount = updatedItems[index].discountAmount || 0;
+                                              updatedItems[index].amount = itemTotal - discountAmount;
+                                               // Recalculate discount % based on new rate and fixed discount amount
+                                              updatedItems[index].discountPercent = itemTotal === 0 ? 0 : parseFloat(((discountAmount / itemTotal) * 100).toFixed(2));
+
                                               return { ...prev, selectedItems: updatedItems };
                                             });
                                           }}
@@ -794,7 +1113,12 @@ const OrderCardForm: React.FC = () => {
                                             setFormData(prev => {
                                               const updatedItems = [...prev.selectedItems];
                                               updatedItems[index].qty = value;
-                                              updatedItems[index].amount = updatedItems[index].rate * value - updatedItems[index].discountAmount;
+                                              // Recalculate amount based on updated qty and existing discount/rate
+                                               const itemTotal = updatedItems[index].rate * value;
+                                              const discountAmount = updatedItems[index].discountAmount || 0;
+                                              updatedItems[index].amount = itemTotal - discountAmount;
+                                                // Recalculate discount % based on new qty and fixed discount amount
+                                              updatedItems[index].discountPercent = itemTotal === 0 ? 0 : parseFloat(((discountAmount / itemTotal) * 100).toFixed(2));
                                               return { ...prev, selectedItems: updatedItems };
                                             });
                                           }}
@@ -830,255 +1154,80 @@ const OrderCardForm: React.FC = () => {
                                           <Button variant="danger" size="sm" onClick={() => handleDeleteItem(index)}>Delete</Button>
                                       </td>
                                   </tr>
-                              ))
-                          )}
-                      </tbody>
-                  </table>
-                  {/* Apply Discount Section */}
-                  <div className="flex justify-between items-center mt-3 p-2 bg-gray-50 rounded border">
-                    <div className="flex items-center space-x-4">
-                      <span className="text-xs font-medium">Discount Type:</span>
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="discountType"
-                          value="percentage"
-                          checked={formData.discountType === 'percentage'}
-                          onChange={() => setFormData(prev => ({ ...prev, discountType: 'percentage' }))}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                        />
-                        <span className="ml-1 text-xs">%</span>
-                      </label>
-                      <label className="inline-flex items-center">
-                        <input
-                          type="radio"
-                          name="discountType"
-                          value="fixed"
-                          checked={formData.discountType === 'fixed'}
-                          onChange={() => setFormData(prev => ({ ...prev, discountType: 'fixed' }))}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                        />
-                        <span className="ml-1 text-xs">Fixed Amount</span>
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <label className="text-xs font-medium">
-                        {formData.discountType === 'percentage' ? 'Discount %:' : 'Discount Amount:'}
-                      </label>
-                      <Input
-                        value={formData.applyDiscount}
-                        name="applyDiscount"
-                        onChange={handleChange}
-                        className="w-16 text-right text-xs px-1 py-0.5"
-                        placeholder={formData.discountType === 'percentage' ? '0.00%' : '0.00'}
-                      />
-                      <Button
-                        type="button"
-                        variant="action"
-                        size="sm"
-                        className="text-xs"
-                        onClick={handleApplyDiscount}
-                      >
-                        Apply Disc
-                      </Button>
-                    </div>
-                  </div>
+                              )))}
+                          </tbody>
+                      </table>
+                      {/* Apply Discount Section */} 
+                      <div className="flex justify-between items-center mt-3 p-2 bg-gray-50 rounded border">
+                        <div className="flex items-center space-x-4">
+                          <span className="text-xs font-medium">Discount Type:</span>
+                          <label className="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="discountType"
+                              value="percentage"
+                              checked={formData.discountType === 'percentage'}
+                              onChange={handleChange} // Use main handleChange
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <span className="ml-1 text-xs">%</span>
+                          </label>
+                          <label className="inline-flex items-center">
+                            <input
+                              type="radio"
+                              name="discountType"
+                              value="fixed"
+                              checked={formData.discountType === 'fixed'}
+                              onChange={handleChange} // Use main handleChange
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <span className="ml-1 text-xs">Fixed Amount</span>
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <label className="text-xs font-medium">
+                            {formData.discountType === 'percentage' ? 'Discount %:' : 'Discount Amount:'}
+                          </label>
+                          <Input
+                            value={formData.applyDiscount}
+                            name="applyDiscount"
+                            onChange={handleChange} // Use main handleChange
+                            className="w-16 text-right text-xs px-1 py-0.5"
+                            placeholder={formData.discountType === 'percentage' ? '0.00%' : '0.00'}
+                          />
+                          <Button
+                            type="button"
+                            variant="action"
+                            size="sm"
+                            className="text-xs"
+                            onClick={handleApplyDiscount}
+                          >
+                            Apply Disc
+                          </Button>
+                        </div>
+                      </div>
              </div>
          </div>
-
-        {/* Remarks and Payment Section (New Layout)*/}
+        {/* Remarks and Payment Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            {/* Remarks and Status */}
-            <div className="border p-4 rounded bg-white shadow-sm text-gray-700">
-                <h3 className="text-lg font-semibold text-blue-700 mb-3 border-b pb-2">Remarks / Status</h3>
-                <div className="grid grid-cols-1 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                      <textarea
-                        value={JSON.stringify(formData.remarks)}
-                        onChange={handleChange}
-                        name="remarks"
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm bg-blue-50"
-                      />
-                    </div>
-                    {/* Order Status, Retest After, Bill No. */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                        {/* Left Column - Order Status */}
-                        <div className="col-span-2">
-                            <div className="flex flex-col">
-                                <label className="text-sm font-medium text-gray-700 mb-1">Order Status:</label>
-                                <div className="flex flex-wrap gap-4">
-                                    {['Processing', 'Fitting', 'Ready', 'Hand Over'].map((status) => (
-                                        <label key={status} className="inline-flex items-center">
-                                            <input
-                                                type="radio"
-                                                name="orderStatus"
-                                                value={status}
-                                                checked={formData.orderStatus === status}
-                                                onChange={handleChange}
-                                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                                            />
-                                            <span className="ml-2 text-sm text-gray-700">{status}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                                <div className="mt-2">
-                                    <Input 
-                                        label="Date:" 
-                                        value={formData.orderStatusDate} 
-                                        name="orderStatusDate" 
-                                        onChange={handleChange} 
-                                        type="datetime-local"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Column - Retest After and Bill No */}
-                        <div className="col-span-1">
-                            <div className="flex flex-col space-y-3">
-                                {/* Retest After with Checkbox and Input */}
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="checkbox"
-                                        id="retestAfterCheckbox"
-                                        checked={retestAfterChecked}
-                                        onChange={handleCheckboxChange}
-                                        name="retestAfterChecked"
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="retestAfterCheckbox" className="text-sm font-medium text-gray-700">
-                                        Retest After:
-                                    </label>
-                                    <Input
-                                        value={formData.retestAfter}
-                                        name="retestAfter"
-                                        onChange={handleChange}
-                                        type="datetime-local"
-                                        className="text-sm flex-1 min-w-0"
-                                        disabled={!retestAfterChecked}
-                                        label=""
-                                    />
-                                </div>
-                                
-                                {/* Handed Over Checkbox */}
-                                <div className="flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        id="handedOver"
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="handedOver" className="ml-2 text-sm font-medium text-gray-700">
-                                        Handed Over
-                                    </label>
-                                </div>
-
-                                {/* Bill No. */}
-                                <div className="flex items-center gap-2">
-                                    <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                                        Bill No.:
-                                    </label>
-                                    <Input 
-                                        value={formData.billNo} 
-                                        name="billNo" 
-                                        onChange={handleChange} 
-                                        className="text-sm flex-1"
-                                        label=""
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Payment Section (Updated Layout) */}
-            <div className="border p-4 rounded bg-white shadow-sm text-gray-700">
-                <h3 className="text-lg font-semibold text-blue-700 mb-3 border-b pb-2">Payment Details</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Left Column of Payment */}
-                    <div className="space-y-3">
-                        <Input
-                          label="Payment Estimate:"
-                          value={formData.paymentEstimate}
-                          name="paymentEstimate"
-                          readOnly
-                          className="bg-blue-100 text-sm"
-                        />
-                        <Input
-                          label="*Sch Amt:"
-                          value={formData.schAmt}
-                          name="schAmt"
-                          readOnly
-                          className="bg-blue-100 text-sm"
-                        />
-                        <Input
-                          label="Advance:"
-                          value={formData.advance}
-                          name="advance"
-                          onChange={handleNumericInputChange}
-                          className="text-sm"
-                          placeholder=""
-                        />
-                        <Input
-                          label="Balance:"
-                          value={formData.balance}
-                          name="balance"
-                          readOnly
-                          className="bg-blue-100 text-sm"
-                        />
-                    </div>
-                    {/* Right Column of Payment */}
-                    <div className="space-y-3">
-                        <Input
-                          label="Cash adv.:"
-                          value={formData.cashAdv1}
-                          name="cashAdv1"
-                          onChange={handleNumericInputChange}
-                          className="text-sm"
-                        />
-                        <Input
-                          label="CC / UPI Adv.:"
-                          value={formData.ccUpiAdv}
-                          name="ccUpiAdv"
-                          onChange={handleNumericInputChange}
-                          className="text-sm"
-                        />
-                         <Input
-                          label="Cheque Adv.:"
-                          value={formData.chequeAdv}
-                          name="chequeAdv"
-                          onChange={handleNumericInputChange}
-                          className="text-sm"
-                        />
-                        {/* Cash Adv. 2 with Date */}
-                        <div className="flex items-center space-x-2">
-                            <Input
-                              label="Cash Adv. 2:"
-                              value={formData.cashAdv2}
-                              name="cashAdv2"
-                              onChange={handleNumericInputChange}
-                              className="text-sm"
-                            />
-                            <Input
-                              label="Date:"
-                              value={formData.cashAdv2Date}
-                              name="cashAdv2Date"
-                              onChange={handleChange}
-                              type="datetime-local"
-                              className="text-sm w-full"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {/* Remarks and Status */} 
+            <RemarksAndStatusSection
+                formData={formData}
+                handleChange={handleChange}
+            />
+            {/* Payment Section */} 
+            <PaymentSection
+                formData={formData}
+                handleChange={handleChange}
+                handleNumericInputChange={handleNumericInputChange}
+            />
         </div>
 
         {/* Bottom Buttons */}
         <div className="flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-4 mt-8">
           <Button type="submit" variant="action">&#60;&#60; Add Order Card &#62;&#62;</Button>
-          <Button type="button" variant="action">&#60;&#60; Edit/Search Order Card &#62;&#62;</Button>
+          {/* These buttons might need logic to interact with search/edit/print features */} 
+          <Button type="button" variant="action">&#60;&#60; Edit/Search Order Card &#62;&#62;</Button> 
           <Button type="button" variant="action">&#60;&#60; Print Order Card &#62;&#62;</Button>
           <Button type="button" variant="action" onClick={handleClear}>&#60;&#60; Clear Order &#62;&#62;</Button>
           <Button type="button" variant="action">&#60;&#60; Exit &#62;&#62;</Button>
@@ -1086,7 +1235,7 @@ const OrderCardForm: React.FC = () => {
 
       </Card>
 
-      {/* Render the Toast Notification */}
+      {/* Render the Toast Notification */} 
       {notification.visible && (
         <ToastNotification
           message={notification.message}
@@ -1095,31 +1244,31 @@ const OrderCardForm: React.FC = () => {
         />
       )}
 
-      {/* Item Selection Popup */}
+      {/* Item Selection Popup */} 
       {showItemSelectionPopup && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
           <div className="relative p-6 border w-11/12 md:w-1/3 shadow-lg rounded-md bg-white">
             <h4 className="text-lg font-semibold mb-4 border-b pb-2 text-blue-700">Select Item Type</h4>
             <div className="space-y-4">
-              <Button 
-                type="button" 
-                variant="action" 
+              <Button
+                type="button"
+                variant="action"
                 className="w-full text-left justify-start"
                 onClick={() => handleAddItemClick('Frames')}
               >
                 Add Frames
               </Button>
-              <Button 
-                type="button" 
-                variant="action" 
+              <Button
+                type="button"
+                variant="action"
                 className="w-full text-left justify-start"
                 onClick={() => handleAddItemClick('Sun Glasses')}
               >
                 Add Sunglasses
               </Button>
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 className="w-full mt-4"
                 onClick={() => setShowItemSelectionPopup(false)}
               >
@@ -1130,7 +1279,7 @@ const OrderCardForm: React.FC = () => {
         </div>
       )}
 
-      {/* Manual Entry Popup */}
+      {/* Manual Entry Popup */} 
       {showManualEntryPopup && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
           <div className="relative p-6 border w-11/12 md:w-2/3 lg:w-1/3 shadow-lg rounded-md bg-white">
@@ -1138,7 +1287,8 @@ const OrderCardForm: React.FC = () => {
               Add {formData.manualEntryType} Manually
             </h4>
             <div className="mb-4">
-              <RadioGroup
+              {/* Assuming RadioGroup is needed, it was in the original CustomerInfoSection */} 
+               <RadioGroup
                 label="Type:"
                 name="manualEntryType"
                 options={[
@@ -1157,13 +1307,48 @@ const OrderCardForm: React.FC = () => {
             </div>
             <div className="flex justify-end space-x-3 mt-6">
               <Button type="button" variant="outline" onClick={() => setShowManualEntryPopup(false)}>Cancel</Button>
-              <Button type="button" variant="action" onClick={handleAddManualEntryItem}>Add</Button>
+              <Button type="button" variant="action" onClick={() => {
+                if (!formData.manualEntryItemName || !formData.manualEntryRate) {
+                  setNotification({
+                    message: 'Please enter both item name and rate',
+                    type: 'error',
+                    visible: true,
+                  });
+                  return;
+                }
+                const newItem: SelectedItem = {
+                  si: formData.selectedItems.length + 1,
+                  itemCode: generateItemCode(formData.manualEntryType), // Assuming generateItemCode exists
+                  itemName: formData.manualEntryItemName,
+                  unit: 'PCS',
+                  taxPercent: 0,
+                  rate: parseFloat(formData.manualEntryRate),
+                  qty: formData.manualEntryQty || 1,
+                  amount: parseFloat(formData.manualEntryRate) * (formData.manualEntryQty || 1),
+                  discountAmount: 0,
+                  discountPercent: 0
+                };
+                setFormData(prev => ({
+                  ...prev,
+                  selectedItems: [...prev.selectedItems, newItem],
+                  manualEntryItemName: '',
+                  manualEntryRate: '',
+                  manualEntryQty: 1,
+                  manualEntryItemAmount: 0
+                }));
+                setShowManualEntryPopup(false);
+                 setNotification({
+                   message: 'Manual item added',
+                   type: 'success',
+                   visible: true
+                 });
+              }}>Add</Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Lens Entry Popup */}
+      {/* Lens Entry Popup */} 
       {showLensEntryPopup && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex justify-center items-center z-50">
           <div className="relative p-6 border w-11/12 md:w-2/3 lg:w-1/3 shadow-lg rounded-md bg-white">
@@ -1192,10 +1377,10 @@ const OrderCardForm: React.FC = () => {
             <div className="flex justify-end space-x-3 mt-6">
               <Button type="button" variant="outline" onClick={() => setShowLensEntryPopup(false)}>Cancel</Button>
               <Button type="button" variant="action" onClick={() => {
-                if (!lensEntry.itemName || !lensEntry.rate) { alert('Please enter item name and rate'); return; }
+                if (!lensEntry.itemName || !lensEntry.rate) { setNotification({ message: 'Please enter item name and rate', type: 'error', visible: true }); return; }
                 const newItem: SelectedItem = {
                   si: formData.selectedItems.length + 1,
-                  itemCode: generateItemCode('Lens'),
+                  itemCode: generateItemCode('Lens'), // Assuming generateItemCode exists
                   itemName: lensEntry.itemName,
                   unit: 'PCS',
                   taxPercent: 0,
@@ -1211,6 +1396,11 @@ const OrderCardForm: React.FC = () => {
                 setFormData(prev => ({ ...prev, selectedItems: [...prev.selectedItems, newItem] }));
                 setLensEntry({ brandName: '', itemName: '', index: '', coating: '', rate: '', qty: '', itemAmount: '' });
                 setShowLensEntryPopup(false);
+                 setNotification({
+                   message: 'Lens item added',
+                   type: 'success',
+                   visible: true
+                 });
               }}>Add</Button>
             </div>
           </div>
@@ -1219,22 +1409,5 @@ const OrderCardForm: React.FC = () => {
     </form>
   );
 };
-
-// Helper functions
-function generateOrderNo(): string {
-  // TODO: Implement proper order number generation logic
-  return `ORD${Date.now().toString().slice(-6)}`;
-}
-
-function generateBillNo(): string {
-  // TODO: Implement proper bill number generation logic
-  return `BILL${Date.now().toString().slice(-6)}`;
-}
-
-function generateItemCode(type: string): string {
-  // TODO: Implement proper item code generation logic
-  const prefix = type === 'Frames' ? 'FRM' : 'SUN';
-  return `${prefix}${Date.now().toString().slice(-4)}`;
-}
 
 export default OrderCardForm; 

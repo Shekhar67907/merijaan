@@ -1,20 +1,11 @@
 import React from 'react';
 import Input from '../ui/Input';
+import { PrescriptionFormData } from '../types';
 
 interface PaymentSectionProps {
-  formData: { // TODO: Replace with specific form data type
-    paymentEstimate: string;
-    schAmt: string;
-    advanceCash: string;
-    advanceCheque: string;
-    advanceCard: string;
-    advanceGPay: string;
-    advancePaytm: string;
-    advanceOther: string;
-    balance: string;
-  };
+  formData: PrescriptionFormData;
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
-  handleNumericInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void; // Assuming some fields are numeric
+  handleNumericInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 const PaymentSection: React.FC<PaymentSectionProps> = ({
@@ -31,7 +22,7 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
           value={formData.paymentEstimate}
           name="paymentEstimate"
           onChange={handleNumericInputChange}
-          type="text" // Use text for formatted input
+          type="text"
         />
         <Input
           label="*Sch Amt:"
@@ -42,43 +33,43 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
         />
         <Input
           label="Advance Cash:"
-          value={formData.advanceCash}
-          name="advanceCash"
+          value={formData.cashAdv1}
+          name="cashAdv1"
           onChange={handleNumericInputChange}
           type="text"
         />
         <Input
           label="Advance Cheque:"
-          value={formData.advanceCheque}
-          name="advanceCheque"
+          value={formData.chequeAdv}
+          name="chequeAdv"
           onChange={handleNumericInputChange}
           type="text"
         />
         <Input
           label="Advance Card:"
-          value={formData.advanceCard}
-          name="advanceCard"
+          value={formData.ccUpiAdv}
+          name="ccUpiAdv"
           onChange={handleNumericInputChange}
           type="text"
         />
         <Input
           label="Advance GPay:"
-          value={formData.advanceGPay}
-          name="advanceGPay"
+          value={formData.advance}
+          name="advance"
           onChange={handleNumericInputChange}
           type="text"
         />
         <Input
           label="Advance Paytm:"
-          value={formData.advancePaytm}
-          name="advancePaytm"
+          value={formData.advance}
+          name="advance"
           onChange={handleNumericInputChange}
           type="text"
         />
         <Input
           label="Advance Other:"
-          value={formData.advanceOther}
-          name="advanceOther"
+          value={formData.advance}
+          name="advance"
           onChange={handleNumericInputChange}
           type="text"
         />
@@ -86,12 +77,11 @@ const PaymentSection: React.FC<PaymentSectionProps> = ({
           label="Balance:"
           value={formData.balance}
           name="balance"
-          readOnly // Balance will be calculated
+          readOnly
           type="text"
           className="bg-blue-100"
         />
       </div>
-      {/* TODO: Add Balance calculation logic */}
     </div>
   );
 };
