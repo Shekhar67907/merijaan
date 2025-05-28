@@ -324,11 +324,6 @@ export const validateAxisWhenCylPresent = (cyl: string, axis: string): Validatio
   return null;
 };
 
-interface ValidationError {
-  field: string;
-  message: string;
-}
-
 interface PrescriptionDVData {
   sph: string;
   cyl: string;
@@ -345,131 +340,52 @@ export const validatePrescriptionData = (
 ): ValidationError[] => {
   const errors: ValidationError[] = [];
 
-  // If it's a balance lens, apply specific validation rules
+  // Skip validation for left eye when balance lens is checked
   if (isBalanceLens) {
-    // For balance lens, left eye DV should have sph='0', cyl='0', ax=''
-    if (dvData.sph !== '0') {
+    return errors; // Return empty errors array since values are copied from right eye
+  }
+
+  // Normal validation rules when not a balance lens
+  if (dvData.sph && dvData.sph !== '') {
+    const sphValue = parseFloat(dvData.sph);
+    if (isNaN(sphValue) || sphValue < -20 || sphValue > 20) {
       errors.push({
         field: 'sph',
-        message: 'Must be 0 for balance lens'
+        message: 'SPH must be between -20 and +20'
       });
-    }
-    
-    if (dvData.cyl !== '0') {
-      errors.push({
-        field: 'cyl',
-        message: 'Must be 0 for balance lens'
-      });
-    }
-    
-    if (dvData.ax !== '') {
-      errors.push({
-        field: 'ax',
-        message: 'Must be empty for balance lens'
-      });
-    }
-    
-    // For balance lens, we might not need to validate other fields as strictly
-    // But we can still validate ADD and VN if they have values
-    if (dvData.add && dvData.add !== '') {
-      const addValue = parseFloat(dvData.add);
-      if (isNaN(addValue) || addValue < 0 || addValue > 4) {
-        errors.push({
-          field: 'add',
-          message: 'ADD must be between 0 and 4'
-        });
-      }
-    }
-  } else {
-    // Normal validation rules when not a balance lens
-    
-    // SPH validation
-    if (dvData.sph && dvData.sph !== '') {
-      const sphValue = parseFloat(dvData.sph);
-      if (isNaN(sphValue) || sphValue < -20 || sphValue > 20) {
-        errors.push({
-          field: 'sph',
-          message: 'SPH must be between -20 and +20'
-        });
-      }
-    }
-    
-    // CYL validation
-    if (dvData.cyl && dvData.cyl !== '') {
-      const cylValue = parseFloat(dvData.cyl);
-      if (isNaN(cylValue) || cylValue < -6 || cylValue > 0) {
-        errors.push({
-          field: 'cyl',
-          message: 'CYL must be between -6 and 0'
-        });
-      }
-      
-      // If CYL has a value, AX is required
-      if (!dvData.ax || dvData.ax === '') {
-        errors.push({
-          field: 'ax',
-          message: 'AX is required when CYL has a value'
-        });
-      }
-    }
-    
-    // AX validation
-    if (dvData.ax && dvData.ax !== '') {
-      const axValue = parseInt(dvData.ax);
-      if (isNaN(axValue) || axValue < 1 || axValue > 180) {
-        errors.push({
-          field: 'ax',
-          message: 'AX must be between 1 and 180'
-        });
-      }
-    }
-    
-    // ADD validation
-    if (dvData.add && dvData.add !== '') {
-      const addValue = parseFloat(dvData.add);
-      if (isNaN(addValue) || addValue < 0 || addValue > 4) {
-        errors.push({
-          field: 'add',
-          message: 'ADD must be between 0 and 4'
-        });
-      }
-    }
-    
-    // VN validation (if it follows a specific format like 6/6, 6/9, etc.)
-    if (dvData.vn && dvData.vn !== '') {
-      const vnPattern = /^6\/\d+$/;
-      if (!vnPattern.test(dvData.vn)) {
-        errors.push({
-          field: 'vn',
-          message: 'VN must be in format 6/X (e.g., 6/6, 6/9)'
-        });
-      }
-    }
-    
-    // RPD/LPD validation
-    if (dvData.rpd && dvData.rpd !== '') {
-      const rpdValue = parseFloat(dvData.rpd);
-      if (isNaN(rpdValue) || rpdValue < 25 || rpdValue > 40) {
-        errors.push({
-          field: 'rpd',
-          message: 'RPD must be between 25 and 40'
-        });
-      }
-    }
-    
-    if (dvData.lpd && dvData.lpd !== '') {
-      const lpdValue = parseFloat(dvData.lpd);
-      if (isNaN(lpdValue) || lpdValue < 25 || lpdValue > 40) {
-        errors.push({
-          field: 'lpd',
-          message: 'LPD must be between 25 and 40'
-        });
-      }
     }
   }
   
+  if (dvData.cyl && dvData.cyl !== '') {
+    const cylValue = parseFloat(dvData.cyl);
+    if (isNaN(cylValue) || cylValue < -6 || cylValue > 0) {
+      errors.push({
+        field: 'cyl',
+        message: 'CYL must be between -6 and 0'
+      });
+    }
+    
+    if (!dvData.ax || dvData.ax === '') {
+      errors.push({
+        field: 'ax',
+        message: 'AX is required when CYL has a value'
+      });
+    }
+  }
+  
+  if (dvData.ax && dvData.ax !== '') {
+    const axValue = parseInt(dvData.ax);
+    if (isNaN(axValue) || axValue < 1 || axValue > 180) {
+      errors.push({
+        field: 'ax',
+        message: 'AX must be between 1 and 180'
+      });
+    }
+  }
+
   return errors;
 };
+
 
 // Format numeric input to maintain step sizes
 export const formatPrescriptionNumber = (value: string, field: keyof typeof PRESCRIPTION_RANGES): string => {

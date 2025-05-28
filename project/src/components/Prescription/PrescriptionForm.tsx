@@ -197,64 +197,47 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.target;
-    console.log('handleCheckboxChange called with:', { name, checked, currentBalanceLens: formData.balanceLens });
+    console.log('handleCheckboxChange called with:', { name, checked });
     
     if (name === 'balanceLens') {
-      // Handle balance lens state update
       setFormData(prev => {
         const newState = {
           ...prev,
-          balanceLens: checked,
-          leftEye: {
-            ...prev.leftEye,
-            dv: checked ? {
-              // When balance lens is checked, set these specific values
-              sph: '0',
-              cyl: '0',
-              ax: '',
-              // Keep other values from right eye or existing left eye
-              add: prev.rightEye.dv.add,
-              vn: prev.rightEye.dv.vn,
-              lpd: prev.leftEye.dv.lpd
-            } : prev.leftEye.dv // When unchecked, keep existing values
-          }
+          balanceLens: checked
         };
-        console.log('New state after balance lens change:', { 
-          balanceLens: newState.balanceLens, 
-          leftEyeDv: newState.leftEye.dv 
-        });
-        return newState;
-      });
-
-      // Clear any existing errors for the left eye fields
-      setErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors['leftEye.dv.sph'];
-        delete newErrors['leftEye.dv.cyl'];
-        delete newErrors['leftEye.dv.ax'];
-        console.log('Cleared errors for left eye fields');
-        return newErrors;
-      });
-    } else {
-      // Handle other checkbox changes
-      setFormData(prev => {
-        let newState = { ...prev };
-        if (name.includes('.')) {
-          const [parent, child] = name.split('.');
-          newState = {
-            ...prev,
-            [parent]: {
-              ...(prev[parent as keyof PrescriptionData] as object),
-              [child]: checked,
-            }
+        
+        // When balance lens is checked, copy right eye values to left eye
+        if (checked) {
+          newState.leftEye = {
+            ...prev.leftEye,
+            dv: {
+              ...prev.rightEye.dv,
+              lpd: prev.leftEye.dv.lpd // Keep original LPD
+            },
+            nv: { ...prev.rightEye.nv }
           };
-        } else {
-          newState = { ...prev, [name]: checked };
         }
+        
         return newState;
       });
+    } else if (name.includes('.')) {
+      // Handle nested checkbox properties
+      const [parent, child] = name.split('.');
+      setFormData(prev => ({
+        ...prev,
+        [parent]: {
+          ...(prev[parent as keyof PrescriptionData] as object),
+          [child]: checked
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked
+      }));
     }
   };
+  
 
   const handleNumericInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -313,27 +296,56 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
     return value;
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const manualSave = async () => {
+    try {
+      // Call the onSubmit prop with the form data
+      onSubmit(formData);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in manualSave:', error);
+      return { success: false };
+    }
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('PrescriptionForm: handleFormSubmit triggered');
     
-    console.log('PrescriptionForm: State before validation:', { formData });
-
-    if (validateForm()) {
-      console.log('PrescriptionForm: Form validation successful, calling onSubmit');
-      onSubmit(formData);
-      
-      // Reset form or show success message
-      alert(`Prescription ${formData.prescriptionNo} added successfully!`);
-      
-      // Generate new prescription number for next entry
+    // If balance lens is checked, copy right eye values to left eye before validation
+    if (formData.balanceLens) {
       setFormData(prev => ({
         ...prev,
-        prescriptionNo: generatePrescriptionNo(),
-        referenceNo: ''
+        leftEye: {
+          ...prev.leftEye,
+          dv: {
+            ...prev.rightEye.dv,
+            lpd: prev.leftEye.dv.lpd // Keep original LPD
+          },
+          nv: { ...prev.rightEye.nv }
+        }
       }));
     }
-  };
+  
+    if (validateForm()) {
+      try {
+        const result = await manualSave();
+        if (result && result.success) {
+          alert(`Prescription ${formData.prescriptionNo} added successfully!`);
+          // Generate new prescription number for next entry
+          setFormData(prev => ({
+            ...prev,
+            prescriptionNo: generatePrescriptionNo(),
+            referenceNo: ''
+          }));
+        } else {
+          alert('Failed to save prescription. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error saving prescription:', error);
+        alert('An error occurred while saving the prescription.');
+      }
+    }
+  };  
 
   const handleClear = () => {
     const newPrescriptionNo = generatePrescriptionNo();
