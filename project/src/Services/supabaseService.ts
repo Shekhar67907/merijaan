@@ -20,7 +20,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing required Supabase environment variables. Please check your .env file.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  }
+});
 
 // Test connection method
 export const testConnection = async () => {
@@ -204,14 +210,14 @@ class PrescriptionService {
         reference_no: data.referenceNo,
         class: data.class,
         prescribed_by: data.prescribedBy,
-        date: data.date,
+        date: data.date || new Date().toISOString().split('T')[0],
         name: data.name,
         title: data.title,
         age: data.age,
         gender: data.gender,
         customer_code: data.customerCode,
-        birth_day: data.birthDay,
-        marriage_anniversary: data.marriageAnniversary,
+        birth_day: data.birthDay || undefined,
+        marriage_anniversary: data.marriageAnniversary || undefined,
         address: data.address,
         city: data.city,
         state: data.state,
@@ -220,7 +226,7 @@ class PrescriptionService {
         mobile_no: data.mobileNo,
         email: data.email,
         ipd: data.ipd,
-        retest_after: data.retestAfter,
+        retest_after: data.retestAfter || undefined,
         others: data.others,
         balance_lens: data.balanceLens,
       };

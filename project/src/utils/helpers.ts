@@ -1,10 +1,14 @@
 /**
- * Generates a prescription number in the format P1920-XXX
+ * Generates a prescription number in the format P2324-XXX
+ * Uses a sequential number based on the current date
  */
 export const generatePrescriptionNo = (): string => {
   const fiscalYear = '2324'; // This would normally be calculated based on current date
-  const randomNum = Math.floor(Math.random() * 999) + 1;
-  return `P${fiscalYear}-${randomNum.toString().padStart(3, '0')}`;
+  const date = new Date();
+  const dayOfYear = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / (1000 * 60 * 60 * 24));
+  const randomNum = Math.floor(Math.random() * 100); // Add some randomness to avoid collisions
+  const sequentialNum = (dayOfYear * 100 + randomNum).toString().padStart(3, '0');
+  return `P${fiscalYear}-${sequentialNum}`;
 };
 
 /**

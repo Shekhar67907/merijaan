@@ -76,17 +76,13 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
   // Handle initial reference number setting and IPD calculation
   useEffect(() => {
-    // Set reference number same as prescription number initially
-    if (!formData.referenceNo) {
-      setFormData(prev => ({ ...prev, referenceNo: prev.prescriptionNo }));
-    }
-    
-    // Calculate IPD from RPD and LPD
+    // Remove auto-setting reference number from prescription number
+    // Only calculate IPD from RPD and LPD
     const calculatedIPD = calculateIPD(formData.rightEye.dv.rpd, formData.leftEye.dv.lpd);
     if (calculatedIPD) {
       setFormData(prev => ({ ...prev, ipd: calculatedIPD }));
     }
-  }, [formData.referenceNo, formData.rightEye.dv.rpd, formData.leftEye.dv.lpd, formData.prescriptionNo]);
+  }, [formData.rightEye.dv.rpd, formData.leftEye.dv.lpd]);
   
   // Handle copying DV values to NV when DV values change
   useEffect(() => {
@@ -352,7 +348,7 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
     
     setFormData({
       prescriptionNo: newPrescriptionNo,
-      referenceNo: newPrescriptionNo,
+      referenceNo: '', // Don't auto-set reference number
       class: '',
       prescribedBy: '',
       date: getTodayDate(),

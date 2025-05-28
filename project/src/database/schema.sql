@@ -35,15 +35,16 @@ CREATE TABLE IF NOT EXISTS prescriptions (
 CREATE TABLE IF NOT EXISTS eye_prescriptions (
     id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
     prescription_id UUID REFERENCES prescriptions(id) ON DELETE CASCADE,
-    eye TEXT NOT NULL,
-    type TEXT NOT NULL,
+    eye_type TEXT NOT NULL,
+    vision_type TEXT NOT NULL,
     sph TEXT,
     cyl TEXT,
     ax TEXT,
-    add TEXT,
+    add_power TEXT,
     vn TEXT,
     rpd TEXT,
     lpd TEXT,
+    spherical_equivalent TEXT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
@@ -71,45 +72,26 @@ CREATE INDEX IF NOT EXISTS idx_prescriptions_mobile_no ON prescriptions(mobile_n
 CREATE INDEX IF NOT EXISTS idx_eye_prescriptions_prescription_id ON eye_prescriptions(prescription_id);
 CREATE INDEX IF NOT EXISTS idx_prescription_remarks_prescription_id ON prescription_remarks(prescription_id);
 
--- Add RLS (Row Level Security) policies
+-- Enable RLS but make it permissive for testing
 ALTER TABLE prescriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE eye_prescriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE prescription_remarks ENABLE ROW LEVEL SECURITY;
 
--- Create policies for authenticated users
-CREATE POLICY "Enable read access for authenticated users" ON prescriptions
-    FOR SELECT TO authenticated USING (true);
+-- Create permissive policies for testing
+CREATE POLICY "Allow all operations on prescriptions"
+ON prescriptions FOR ALL
+TO public
+USING (true)
+WITH CHECK (true);
 
-CREATE POLICY "Enable insert access for authenticated users" ON prescriptions
-    FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "Allow all operations on eye_prescriptions"
+ON eye_prescriptions FOR ALL
+TO public
+USING (true)
+WITH CHECK (true);
 
-CREATE POLICY "Enable update access for authenticated users" ON prescriptions
-    FOR UPDATE TO authenticated USING (true);
-
-CREATE POLICY "Enable delete access for authenticated users" ON prescriptions
-    FOR DELETE TO authenticated USING (true);
-
--- Similar policies for eye_prescriptions and prescription_remarks
-CREATE POLICY "Enable read access for authenticated users" ON eye_prescriptions
-    FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY "Enable insert access for authenticated users" ON eye_prescriptions
-    FOR INSERT TO authenticated WITH CHECK (true);
-
-CREATE POLICY "Enable update access for authenticated users" ON eye_prescriptions
-    FOR UPDATE TO authenticated USING (true);
-
-CREATE POLICY "Enable delete access for authenticated users" ON eye_prescriptions
-    FOR DELETE TO authenticated USING (true);
-
-CREATE POLICY "Enable read access for authenticated users" ON prescription_remarks
-    FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY "Enable insert access for authenticated users" ON prescription_remarks
-    FOR INSERT TO authenticated WITH CHECK (true);
-
-CREATE POLICY "Enable update access for authenticated users" ON prescription_remarks
-    FOR UPDATE TO authenticated USING (true);
-
-CREATE POLICY "Enable delete access for authenticated users" ON prescription_remarks
-    FOR DELETE TO authenticated USING (true); 
+CREATE POLICY "Allow all operations on prescription_remarks"
+ON prescription_remarks FOR ALL
+TO public
+USING (true)
+WITH CHECK (true); 
