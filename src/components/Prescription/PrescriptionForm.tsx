@@ -26,10 +26,12 @@ import LensPrescriptionSection from './LensPrescriptionSection';
 
 interface PrescriptionFormProps {
   onSubmit: (data: PrescriptionData) => void;
+  initialData?: PrescriptionData;
 }
 
-const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
-  const [formData, setFormData] = useState<PrescriptionData>({
+const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit, initialData }) => {
+  // Use initialData if provided, otherwise use default values
+  const [formData, setFormData] = useState<PrescriptionData>(initialData || {
     prescriptionNo: generatePrescriptionNo(),
     referenceNo: '',
     class: '',
@@ -76,6 +78,29 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notification, setNotification] = useState<{message: string; type: 'success' | 'error'; visible: boolean}>({message: '', type: 'error', visible: false});
+
+  // Update form data when initialData changes (when a search result is selected)
+  useEffect(() => {
+    if (initialData) {
+      console.log('Updating form with initialData:', initialData);
+      setFormData(initialData);
+    }
+  }, [initialData]);
+  
+  // Force prescription number to be set correctly when component loads
+  useEffect(() => {
+    // If prescription number is empty, generate a new one
+    if (!formData.prescriptionNo) {
+      const newPrescriptionNo = generatePrescriptionNo();
+      console.log('Setting new prescription number:', newPrescriptionNo);
+      setFormData(prev => ({
+        ...prev,
+        prescriptionNo: newPrescriptionNo,
+        // Also set reference number if it's empty
+        referenceNo: prev.referenceNo || newPrescriptionNo
+      }));
+    }
+  }, []);
 
   // Handle initial reference number setting and IPD calculation
   useEffect(() => {
@@ -456,11 +481,10 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div>
             <Input 
-              label="Prescription No.:" 
-              value={formData.prescriptionNo} 
+              label="Prescription No.:"
+              value={formData.prescriptionNo || 'P2324-' + (Math.floor(Math.random() * 900) + 100)} 
               onChange={handleChange}
               name="prescriptionNo"
-              readOnly
             />
           </div>
           <div>
