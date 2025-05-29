@@ -1,18 +1,15 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Input from '../ui/Input';
 import Checkbox from '../ui/Checkbox';
-import { formatNumericInput } from '../../utils/helpers';
-import { PrescriptionData, EyeData, VisualAcuity } from '../types';
+import { EyeData, VisualAcuity } from '../types';
 import { 
-  validatePrescriptionData, 
   calculateNearVisionSph, 
   validateAndFormatVn,
   checkHighPrescription,
-  calculateSphericalEquivalent,
-  handleSpecialCases,
   validateVnValue,
   formatVnValue,
-  formatPrescriptionNumber
+  calculateSphericalEquivalent,
+  validatePrescriptionData
 } from '../../utils/prescriptionUtils';
 
 interface PrescriptionSectionProps {
@@ -21,6 +18,7 @@ interface PrescriptionSectionProps {
     leftEye: EyeData;
     balanceLens: boolean;
     age: number;
+    ipd?: string;
   };
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   handleNumericInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -106,50 +104,122 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
     }
   };
 
-  // Effect to handle prescription logic
+  // Effect to handle prescription logic - using a ref to prevent infinite loops
+  const prevRpdRef = React.useRef(formData.rightEye.dv.rpd);
+  const prevLpdRef = React.useRef(formData.leftEye.dv.lpd);
+  
   useEffect(() => {
+    // Only run if RPD or LPD has actually changed
+    const rpdChanged = prevRpdRef.current !== formData.rightEye.dv.rpd;
+    const lpdChanged = prevLpdRef.current !== formData.leftEye.dv.lpd;
+    
+    // Update refs
+    prevRpdRef.current = formData.rightEye.dv.rpd;
+    prevLpdRef.current = formData.leftEye.dv.lpd;
+    
+    // Skip calculation if nothing changed to prevent infinite loops
+    if (!rpdChanged && !lpdChanged) return;
+    
     // Calculate IPD from RPD and LPD
     if (formData.rightEye.dv.rpd && formData.leftEye.dv.lpd) {
       const rpdValue = parseFloat(formData.rightEye.dv.rpd);
       const lpdValue = parseFloat(formData.leftEye.dv.lpd);
       if (!isNaN(rpdValue) && !isNaN(lpdValue)) {
         const calculatedIPD = (rpdValue + lpdValue).toFixed(1);
-        handleChange({
-          target: {
-            name: 'ipd',
-            value: calculatedIPD
-          }
-        } as React.ChangeEvent<HTMLInputElement>);
+        // Avoid unnecessary updates
+        if (formData.ipd !== calculatedIPD) {
+          // Use setTimeout to break the render cycle
+          setTimeout(() => {
+            handleChange({
+              target: {
+                name: 'ipd',
+                value: calculatedIPD
+              }
+            } as React.ChangeEvent<HTMLInputElement>);
+          }, 0);
+        }
       }
     }
-  }, [formData.rightEye.dv.rpd, formData.leftEye.dv.lpd, handleChange]);
+  }, [formData.rightEye.dv.rpd, formData.leftEye.dv.lpd, formData.ipd, handleChange]);
 
-  // Effect to initialize Vn fields
+  // Effect to initialize Vn fields - only runs on component mount
   useEffect(() => {
-    // Initialize D.V Vn fields with "6/" if empty
-    (['rightEye', 'leftEye'] as const).forEach(eye => {
-      if (!formData[eye].dv.vn) {
-        handleChange({
-          target: {
-            name: `${eye}.dv.vn`,
-            value: '6/'
-          }
-        } as React.ChangeEvent<HTMLInputElement>);
+    // Create a temporary object to store all changes
+    const updates: Record<string, string> = {};
+    
+    // Check all fields and build updates object
+    (['rightEye', 'leftEye'] as const).forEach(eyeKey => {
+      if (!formData[eyeKey].dv.vn) {
+        updates[`${eyeKey}.dv.vn`] = '6/';
       }
-      // Initialize N.V Vn fields with "N" if empty
-      if (!formData[eye].nv.vn) {
-        handleChange({
-          target: {
-            name: `${eye}.nv.vn`,
-            value: 'N'
-          }
-        } as React.ChangeEvent<HTMLInputElement>);
+      if (!formData[eyeKey].nv.vn) {
+        updates[`${eyeKey}.nv.vn`] = 'N';
       }
     });
+    
+    // Only apply changes if there are any updates to make
+    if (Object.keys(updates).length > 0) {
+      // Apply all changes at once
+      const updatedFormData = {...formData};
+      
+      // Update the formData with all changes
+      Object.entries(updates).forEach(([path, value]) => {
+        const parts = path.split('.');
+        const eyeKey = parts[0] as 'rightEye' | 'leftEye';
+        const visionType = parts[1] as 'dv' | 'nv';
+        const field = parts[2];
+        
+        // Type-safe assignment
+        if (eyeKey && visionType && field) {
+          // Add type safety for field access
+          if (field === 'sph' || field === 'cyl' || field === 'ax' || 
+              field === 'add' || field === 'vn' || field === 'rpd' || 
+              field === 'lpd' || field === 'sphericalEquivalent') {
+            updatedFormData[eyeKey][visionType][field] = value;
+          }
+        }
+      });
+      
+      // Send the updated form data in a single update event
+      // Create a custom event structure instead of trying to cast to React.ChangeEvent
+      const customEvent = {
+        target: {
+          name: 'formData',
+          value: updatedFormData
+        }
+      };
+      
+      // Use setTimeout to break the render cycle
+      setTimeout(() => {
+        // Use type assertion to unknown first, then to the expected event type
+        handleChange(customEvent as unknown as React.ChangeEvent<HTMLInputElement>);
+      }, 0);
+    }
   }, []);
 
   // Check for high prescription values when SPH or CYL changes
+  // Using refs to track previous values and prevent infinite loops
+  const prevRightSphRef = React.useRef(formData.rightEye.dv.sph);
+  const prevRightCylRef = React.useRef(formData.rightEye.dv.cyl);
+  const prevLeftSphRef = React.useRef(formData.leftEye.dv.sph);
+  const prevLeftCylRef = React.useRef(formData.leftEye.dv.cyl);
+  
   useEffect(() => {
+    // Only run if SPH or CYL values actually changed
+    const rightSphChanged = prevRightSphRef.current !== formData.rightEye.dv.sph;
+    const rightCylChanged = prevRightCylRef.current !== formData.rightEye.dv.cyl;
+    const leftSphChanged = prevLeftSphRef.current !== formData.leftEye.dv.sph;
+    const leftCylChanged = prevLeftCylRef.current !== formData.leftEye.dv.cyl;
+    
+    // Update refs
+    prevRightSphRef.current = formData.rightEye.dv.sph;
+    prevRightCylRef.current = formData.rightEye.dv.cyl;
+    prevLeftSphRef.current = formData.leftEye.dv.sph;
+    prevLeftCylRef.current = formData.leftEye.dv.cyl;
+    
+    // Skip if nothing changed to prevent infinite loops
+    if (!rightSphChanged && !rightCylChanged && !leftSphChanged && !leftCylChanged) return;
+    
     const rightEyeWarnings = checkHighPrescription(
       formData.rightEye.dv.sph,
       formData.rightEye.dv.cyl
@@ -160,41 +230,55 @@ const PrescriptionSection: React.FC<PrescriptionSectionProps> = ({
       formData.leftEye.dv.cyl
     ).warnings;
 
-    setWarnings({
-      rightEye: rightEyeWarnings,
-      leftEye: leftEyeWarnings
-    });
+    // Only update if warnings actually changed
+    const rightWarningsChanged = JSON.stringify(rightEyeWarnings) !== JSON.stringify(warnings.rightEye);
+    const leftWarningsChanged = JSON.stringify(leftEyeWarnings) !== JSON.stringify(warnings.leftEye);
+    
+    if (rightWarningsChanged || leftWarningsChanged) {
+      setWarnings({
+        rightEye: rightEyeWarnings,
+        leftEye: leftEyeWarnings
+      });
+    }
   }, [
     formData.rightEye.dv.sph,
     formData.rightEye.dv.cyl,
     formData.leftEye.dv.sph,
-    formData.leftEye.dv.cyl
+    formData.leftEye.dv.cyl,
+    warnings
   ]);
 
   // Update visual acuity status when VN changes
+  // Using refs to track previous values and prevent infinite loops
+  const prevRightVnRef = React.useRef(formData.rightEye.dv.vn);
+  const prevLeftVnRef = React.useRef(formData.leftEye.dv.vn);
+  
   useEffect(() => {
+    // Only run if VN values actually changed
+    const rightVnChanged = prevRightVnRef.current !== formData.rightEye.dv.vn;
+    const leftVnChanged = prevLeftVnRef.current !== formData.leftEye.dv.vn;
+    
+    // Update refs
+    prevRightVnRef.current = formData.rightEye.dv.vn;
+    prevLeftVnRef.current = formData.leftEye.dv.vn;
+    
+    // Skip if nothing changed to prevent infinite loops
+    if (!rightVnChanged && !leftVnChanged) return;
+    
+    // Process the visual acuity values
     const rightVa = validateAndFormatVn(formData.rightEye.dv.vn);
     const leftVa = validateAndFormatVn(formData.leftEye.dv.vn);
 
-    setVaStatus({
-      rightEye: rightVa,
-      leftEye: leftVa
-    });
-  }, [formData.rightEye.dv.vn, formData.leftEye.dv.vn]);
-
-  // Calculate the division result for Vn field
-  const calculateVnDivision = (value: string): string => {
-    if (!value.startsWith('6/')) return value;
-    const denominator = value.substring(2);
-    if (!denominator || denominator === '0') return value;
-    
-    const result = 6 / parseInt(denominator, 10);
-    // Only show division result if it's a clean number
-    if (Number.isInteger(result)) {
-      return `6/${denominator} (${result})`;
+    // Only update state if values actually changed
+    if (rightVa !== vaStatus.rightEye || leftVa !== vaStatus.leftEye) {
+      setVaStatus({
+        rightEye: rightVa,
+        leftEye: leftVa
+      });
     }
-    return value;
-  };
+  }, [formData.rightEye.dv.vn, formData.leftEye.dv.vn, vaStatus]);
+
+
 
   // Handle Vn field changes
   const handleVnChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import PrescriptionForm from './PrescriptionForm';
 import { PrescriptionData } from '../../types';
-import { useAutoSave } from '../../hooks/useAutoSave';
 import ToastNotification from '../ui/ToastNotification';
 import Card from '../ui/Card';
 import Input from '../ui/Input';
 import { supabase } from '../../utils/supabaseClient';
-import Button from '../ui/Button';
+import { prescriptionService } from '../../Services/supabaseService';
 
 // Interface for search suggestions based on API response
 interface SearchSuggestion extends PrescriptionData {
@@ -349,35 +348,106 @@ const PrescriptionPage: React.FC = () => {
 
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion: SearchSuggestion) => {
-    console.log('Selected suggestion:', suggestion);
-    setFormData(suggestion);
+    console.log('Selected suggestion raw data:', suggestion);
+    
+    // Create a deep clone of the suggestion to avoid mutation issues
+    const processedSuggestion = {
+      ...suggestion,
+      // Format dates properly - ensure they're valid or empty strings
+      birthDay: suggestion.birthDay || '',
+      marriageAnniversary: suggestion.marriageAnniversary || '',
+      date: suggestion.date || '',
+      retestAfter: suggestion.retestAfter || '',
+      
+      // Explicitly map eye prescription data to ensure proper field mapping
+      rightEye: {
+        dv: {
+          sph: suggestion.rightEye?.dv?.sph || '',
+          cyl: suggestion.rightEye?.dv?.cyl || '',
+          ax: suggestion.rightEye?.dv?.ax || '',
+          add: suggestion.rightEye?.dv?.add || '', // Handle add_power vs add
+          vn: suggestion.rightEye?.dv?.vn || '',
+          rpd: suggestion.rightEye?.dv?.rpd || ''
+        },
+        nv: {
+          sph: suggestion.rightEye?.nv?.sph || '',
+          cyl: suggestion.rightEye?.nv?.cyl || '',
+          ax: suggestion.rightEye?.nv?.ax || '',
+          add: suggestion.rightEye?.nv?.add || '', // Handle add_power vs add
+          vn: suggestion.rightEye?.nv?.vn || ''
+        }
+      },
+      leftEye: {
+        dv: {
+          sph: suggestion.leftEye?.dv?.sph || '',
+          cyl: suggestion.leftEye?.dv?.cyl || '',
+          ax: suggestion.leftEye?.dv?.ax || '',
+          add: suggestion.leftEye?.dv?.add || '', // Handle add_power vs add
+          vn: suggestion.leftEye?.dv?.vn || '',
+          lpd: suggestion.leftEye?.dv?.lpd || ''
+        },
+        nv: {
+          sph: suggestion.leftEye?.nv?.sph || '',
+          cyl: suggestion.leftEye?.nv?.cyl || '',
+          ax: suggestion.leftEye?.nv?.ax || '',
+          add: suggestion.leftEye?.nv?.add || '', // Handle add_power vs add
+          vn: suggestion.leftEye?.nv?.vn || ''
+        }
+      },
+      
+      // Ensure remarks are properly mapped
+      remarks: {
+        forConstantUse: suggestion.remarks?.forConstantUse || false,
+        forDistanceVisionOnly: suggestion.remarks?.forDistanceVisionOnly || false,
+        forNearVisionOnly: suggestion.remarks?.forNearVisionOnly || false,
+        separateGlasses: suggestion.remarks?.separateGlasses || false,
+        biFocalLenses: suggestion.remarks?.biFocalLenses || false,
+        progressiveLenses: suggestion.remarks?.progressiveLenses || false,
+        antiReflectionLenses: suggestion.remarks?.antiReflectionLenses || false,
+        antiRadiationLenses: suggestion.remarks?.antiRadiationLenses || false,
+        underCorrected: suggestion.remarks?.underCorrected || false
+      },
+      
+      // Make sure balanceLens is properly cast to boolean
+      balanceLens: !!suggestion.balanceLens
+    };
+    
+    console.log('Processed suggestion for form:', processedSuggestion);
+    setFormData(processedSuggestion);
     setShowSuggestions(false);
     setSearchTerm('');
   };
 
-  // Auto-save will run silently without showing notifications
-  const { manualSave, isSaving } = useAutoSave(formData, {
-    onSaveSuccess: (data) => {
-      // Don't show notifications for background auto-saves
-      console.log('Auto-save completed silently');
-    },
-    onSaveError: (error) => {
-      // Only show error notifications (important for users to know)
-      showErrorToast(error);
+  // Track saving state
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Manual save function
+  const savePrescription = async (data: PrescriptionData) => {
+    setIsSaving(true);
+    try {
+      const result = await prescriptionService.autoSavePrescription(data);
+      if (result.success) {
+        showSuccessToast();
+        return result;
+      } else {
+        showErrorToast(result.error || 'Unknown error');
+        return null;
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Error saving prescription';
+      showErrorToast(errorMessage);
+      return null;
+    } finally {
+      setIsSaving(false);
     }
-  });
+  };
 
   const handleSubmit = async (data: PrescriptionData) => {
     console.log('PrescriptionPage: handleSubmit triggered', data);
     setFormData(data);
     
-    try {
-      await manualSave();
-      // Show success notification only for manual saves
-      showSuccessToast();
-    } catch (error) {
-      // Error handling is already covered by onSaveError
-    }
+    // Save the prescription manually (only when the Add Prescription button is clicked)
+    await savePrescription(data);
   };
 
   return (
@@ -453,7 +523,7 @@ const PrescriptionPage: React.FC = () => {
         )}
       </Card>
       
-      <PrescriptionForm onSubmit={handleSubmit} />
+      <PrescriptionForm onSubmit={handleSubmit} initialData={formData} />
       {showToast && (
         <ToastNotification
           message={toastMessage}
