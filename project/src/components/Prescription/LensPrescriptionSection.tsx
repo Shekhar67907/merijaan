@@ -508,17 +508,28 @@ const LensPrescriptionSection: React.FC<LensPrescriptionSectionProps> = ({
                     </div>
                   )}
                 </td>
-                <td className="border border-gray-300 p-1"><Input value={formData.rightEye.dv.rpd} name="rightEye.dv.rpd" onChange={handleNumericInputChange} onBlur={(e) => {
-                  const value = parseFloat(e.target.value);
-                  if (!isNaN(value)) {
-                    handleChange({
-                      target: {
-                        name: e.target.name,
-                        value: value.toFixed(1)
+                <td className="border border-gray-300 p-1"><Input 
+                  value={formData.rightEye.dv.rpd} 
+                  name="rightEye.dv.rpd" 
+                  onChange={handleNumericInputChange} 
+                  helperText="Valid range: 25-38mm" 
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value)) {
+                      // Check if value is within valid range
+                      if (value < 25 || value > 38) {
+                        alert(`RPD must be between 25-38mm. You entered: ${value}mm`);
                       }
-                    } as React.ChangeEvent<HTMLInputElement>);
-                  }
-                }} className="text-center text-sm" /></td>
+                      handleChange({
+                        target: {
+                          name: e.target.name,
+                          value: value.toFixed(1)
+                        }
+                      } as React.ChangeEvent<HTMLInputElement>);
+                    }
+                  }} 
+                  className="text-center text-sm" 
+                /></td>
                 <td className="border border-gray-300 p-1 text-sm text-gray-600">{formData.rightEye.dv.sphericalEquivalent || '-'}</td>
               </tr>
               <tr>
@@ -607,17 +618,28 @@ const LensPrescriptionSection: React.FC<LensPrescriptionSectionProps> = ({
                     </div>
                   )}
                 </td>
-                <td className="border border-gray-300 p-1"><Input value={formData.leftEye.dv.lpd} name="leftEye.dv.lpd" onChange={handleNumericInputChange} onBlur={(e) => {
-                  const value = parseFloat(e.target.value);
-                  if (!isNaN(value)) {
-                    handleChange({
-                      target: {
-                        name: e.target.name,
-                        value: value.toFixed(1)
+                <td className="border border-gray-300 p-1"><Input 
+                  value={formData.leftEye.dv.lpd} 
+                  name="leftEye.dv.lpd" 
+                  onChange={handleNumericInputChange} 
+                  helperText="Valid range: 25-38mm" 
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value)) {
+                      // Check if value is within valid range
+                      if (value < 25 || value > 38) {
+                        alert(`LPD must be between 25-38mm. You entered: ${value}mm`);
                       }
-                    } as React.ChangeEvent<HTMLInputElement>);
-                  }
-                }} className="text-center text-sm" /></td>
+                      handleChange({
+                        target: {
+                          name: e.target.name,
+                          value: value.toFixed(1)
+                        }
+                      } as React.ChangeEvent<HTMLInputElement>);
+                    }
+                  }} 
+                  className="text-center text-sm" 
+                /></td>
                 <td className="border border-gray-300 p-1 text-sm text-gray-600">{formData.leftEye.dv.sphericalEquivalent || '-'}</td>
               </tr>
               <tr>

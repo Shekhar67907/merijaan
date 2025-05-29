@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ToastNotification from '../ui/ToastNotification';
 import Card from '../ui/Card';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
@@ -74,6 +75,7 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [notification, setNotification] = useState<{message: string; type: 'success' | 'error'; visible: boolean}>({message: '', type: 'error', visible: false});
 
   // Handle initial reference number setting and IPD calculation
   useEffect(() => {
@@ -118,6 +120,7 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
+    const missingFields: string[] = [];
     
     console.log('validateForm called with state:', { 
       balanceLens: formData.balanceLens, 
@@ -126,16 +129,19 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
     
     if (!formData.prescribedBy) {
       newErrors.prescribedBy = 'Prescribed By is required';
+      missingFields.push('Prescribed By');
     }
     
     if (!formData.name) {
       newErrors.name = 'Name is required';
+      missingFields.push('Name');
     }
 
     // Validate right eye prescription
     const rightEyeErrors = validatePrescriptionData(formData.rightEye.dv, false);
     rightEyeErrors.forEach(error => {
       newErrors[`rightEye.dv.${error.field}`] = error.message;
+      missingFields.push(`Right Eye ${error.field.toUpperCase()} - ${error.message}`);
     });
 
     // Validate left eye prescription, considering balance lens
@@ -148,10 +154,25 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
     
     leftEyeErrors.forEach(error => {
       newErrors[`leftEye.dv.${error.field}`] = error.message;
+      missingFields.push(`Left Eye ${error.field.toUpperCase()} - ${error.message}`);
     });
     
     setErrors(newErrors);
     console.log('PrescriptionForm: validateForm result', Object.keys(newErrors).length === 0, { newErrors });
+    
+    // Show toast notification if there are any errors
+    if (missingFields.length > 0) {
+      const message = missingFields.length === 1
+        ? `Please fill the required field: ${missingFields[0]}`
+        : `Please fill all required fields (${missingFields.length} missing)`;
+        
+      setNotification({
+        message: message,
+        type: 'error',
+        visible: true
+      });
+    }
+    
     return Object.keys(newErrors).length === 0;
   };
 
@@ -394,8 +415,17 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
     setErrors({});
   };
 
+
+
   return (
-    <form onSubmit={handleFormSubmit} className="w-full max-w-screen-xl mx-auto">
+    <form onSubmit={handleFormSubmit} className="max-w-7xl mx-auto">
+      {notification.visible && (
+        <ToastNotification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification({...notification, visible: false})}
+        />
+      )}
       <Card className="mb-4">
         <div className="flex justify-between items-center mb-4">
           <Button type="button" variant="outline" size="sm">
@@ -407,7 +437,7 @@ const PrescriptionForm: React.FC<PrescriptionFormProps> = ({ onSubmit }) => {
               &lt;&lt; First
             </Button>
             <Button type="button" variant="outline" size="sm">
-              &lt; Prev
+              {"< Prev"}
             </Button>
             <Button type="button" variant="outline" size="sm">
               Next &gt;

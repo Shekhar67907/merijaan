@@ -232,11 +232,14 @@ class PrescriptionService {
       };
 
       if (prescriptionId) {
-        // Update existing prescription
+        // Update existing prescription using upsert instead of update to avoid CORS PATCH issues
          const { data: updatedPrescription, error: prescriptionError } = await supabase
           .from('prescriptions')
-          .update({ ...prescriptionToSave, updated_at: new Date().toISOString() })
-          .eq('id', prescriptionId)
+          .upsert({ 
+            id: prescriptionId, // Include id for upsert to work
+            ...prescriptionToSave, 
+            updated_at: new Date().toISOString() 
+          })
           .select()
           .single();
 
@@ -338,11 +341,13 @@ class PrescriptionService {
       };
 
       if (prescriptionId) {
-        // Update existing remarks
+        // Update existing remarks using upsert instead of update to avoid CORS PATCH issues
         const { error: remarksError } = await supabase
           .from('prescription_remarks')
-          .update(remarksToSave)
-          .eq('prescription_id', prescriptionId);
+          .upsert({
+            ...remarksToSave,
+            prescription_id: prescriptionId
+          });
 
         if (remarksError) throw remarksError;
       } else {
